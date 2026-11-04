@@ -12,9 +12,12 @@ class AppIconChoiceTest {
     private val cyan = 0x00E5FF
 
     @Test
-    fun noControllersShowThePlayersColours() {
-        assertEquals("0123", AppIconChoice.key(emptyList()))
-        assertEquals(listOf(blue, red, 0x00FF2A, pink), AppIconChoice.colors(AppIconChoice.DEFAULT_KEY))
+    fun noControllersShowThePlainIcon() {
+        assertEquals(AppIconChoice.PLAIN_KEY, AppIconChoice.key(emptyList()))
+        assertEquals(emptyList<Int>(), AppIconChoice.colors(AppIconChoice.PLAIN_KEY))
+        assertEquals("icon.Plain", AppIconChoice.aliasName(AppIconChoice.PLAIN_KEY))
+        assertEquals("icon.Lights0123", AppIconChoice.aliasName("0123"))
+        assertEquals(listOf(blue, red, 0x00FF2A, pink), AppIconChoice.colors("0123"))
     }
 
     @Test
@@ -42,7 +45,7 @@ class AppIconChoiceTest {
         // tools/app_icons.py ships the strictly increasing index strings of length 1 to 4.
         val random = Random(7)
         repeat(2_000) {
-            val colors = List(random.nextInt(0, 7)) { random.nextInt(0, 0x1000000) }
+            val colors = List(random.nextInt(1, 7)) { random.nextInt(0, 0x1000000) }
             val key = AppIconChoice.key(colors)
             assertTrue(key, key.length in 1..AppIconChoice.MAX_COLORS)
             assertTrue(key, key.all { it in '0'..'8' })

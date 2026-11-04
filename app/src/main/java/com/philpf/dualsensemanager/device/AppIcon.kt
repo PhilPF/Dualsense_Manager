@@ -5,10 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import com.philpf.dualsensemanager.core.AppIconChoice
 
 /**
  * Switches the app's launcher icon. Every icon is an activity-alias of MainActivity in the
- * manifest ("icon.Lights" + its key, see core/AppIconChoice); exactly one is enabled at a time.
+ * manifest (named by core/AppIconChoice.aliasName); exactly one is enabled at a time.
  *
  * Disabling the alias a window was opened from closes that window, so callers switch only while
  * the app is not on screen. Launchers may take a moment to show the new icon.
@@ -19,7 +20,7 @@ class AppIcon(private val context: Context) {
 
     /** Shows the icon with [key]; does nothing when it is already the only one enabled. */
     fun show(key: String) {
-        val target = ComponentName(context.packageName, "${context.packageName}.icon.Lights$key")
+        val target = ComponentName(context.packageName, "${context.packageName}.${AppIconChoice.aliasName(key)}")
         val enabled = enabledLauncherAliases()
         if (enabled == listOf(target)) return
         // Enable the new icon before disabling the old one, so there is always one to tap.

@@ -8,9 +8,6 @@ import kotlin.math.sin
 data class IconLight(val x: Float, val y: Float, val radius: Float)
 
 object IconLights {
-    /** Without connected controllers the icon shows the PS players' colours, like the launcher icon. */
-    val DEFAULT_COLORS = listOf(0x0030FF, 0xFF0A14, 0x00FF2A, 0xFF1E8C)
-
     /**
      * Where [count] lights go: one fills the icon, two sit side by side, three make a triangle,
      * four take the corners (as on the launcher icon, ic_launcher_background), and more go

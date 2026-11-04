@@ -25,6 +25,5 @@ class IconLightsTest {
             listOf(IconLight(30f, 30f, 50f), IconLight(78f, 30f, 50f), IconLight(30f, 78f, 50f), IconLight(78f, 78f, 50f)),
             IconLights.layout(4),
         )
-        assertEquals(4, IconLights.DEFAULT_COLORS.size)
     }
 }

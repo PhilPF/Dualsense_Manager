@@ -102,7 +102,7 @@ fun ColumnScope.SettingsSheetContent(settings: SettingsStore, theme: ThemeMode, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The icon the launcher shows, as a launcher shows it: the middle 72 of its 108 dp.
-        val key = if (iconFollows) AppIconChoice.key(colors) else AppIconChoice.DEFAULT_KEY
+        val key = if (iconFollows) AppIconChoice.key(colors) else AppIconChoice.PLAIN_KEY
         val icon = remember(key) { ControllersIcon.render(context, AppIconChoice.colors(key), 216).asImageBitmap() }
         Canvas(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))) {
             drawImage(

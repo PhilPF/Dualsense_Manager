@@ -72,15 +72,15 @@ class DualsenseApp : Application() {
     }
 
     /**
-     * Switches the launcher icon to the connected controllers' colours (or back to the default)
-     * when the setting is on. Switching closes the app's window, so it waits until the app is
+     * Switches the launcher icon to the connected controllers' colours when the setting is on,
+     * and back to the plain icon when it is off or no controller is connected. Switching closes the app's window, so it waits until the app is
      * off screen, and a few seconds, so controllers connecting together switch it once.
      */
     @OptIn(FlowPreview::class)
     private fun followControllersWithIcon() {
         val icon = AppIcon(this)
         val wanted = combine(connected, settings.iconFollowsControllers) { views, follows ->
-            if (follows) AppIconChoice.key(views.map { it.color }) else AppIconChoice.DEFAULT_KEY
+            if (follows) AppIconChoice.key(views.map { it.color }) else AppIconChoice.PLAIN_KEY
         }.distinctUntilChanged()
         scope.launch(Dispatchers.Default) {
             combine(wanted, uiVisible) { key, visible -> key.takeUnless { visible } }

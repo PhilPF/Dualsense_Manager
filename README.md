@@ -39,7 +39,7 @@ lights and read its battery).
   charged. Both can be turned off in Settings.
 - **At a glance.** A one-cell home-screen widget: a stack with a card per connected controller,
   drawn as in the app (the controller in lines over a glow of its colour) with its name and
-  battery. Swipe down to snap to the next one; a pill on the side has a dot per controller in
+  battery. Swipe down to snap to the next one; a pill on its left has a dot per controller in
   its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
   notification showing the controllers the same way.
 - **App icon.** The controller in lines over coloured lights behind glass. With "Controllers'

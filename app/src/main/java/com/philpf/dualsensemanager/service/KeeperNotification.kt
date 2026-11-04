@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.view.View
 import android.widget.RemoteViews
@@ -55,6 +56,16 @@ internal fun controllerBitmap(context: Context, color: Int, size: Int = 192): Bi
     return bitmap
 }
 
+/**
+ * The colour of the circle behind the small icon in a notification's header. Android draws the
+ * icon itself in the notification's background colour, and keeps the circle as given when it
+ * contrasts with that background: black on a light notification (a white controller on black),
+ * white on a dark one (where a black circle would hide the dark controller).
+ */
+internal fun headerColor(night: Boolean): Int = if (night) Color.WHITE else Color.BLACK
+
+internal fun Context.isNight(): Boolean = resources.configuration.isNightModeActive
+
 /** The quiet notification of the light service: each connected controller and its battery. */
 object KeeperNotification {
     const val ID = 1
@@ -74,9 +85,11 @@ object KeeperNotification {
         manager.createNotificationChannel(channel)
     }
 
-    fun build(context: Context, views: List<ControllerView>): Notification {
+    /** [night]: whether the system is dark, for the header's icon. */
+    fun build(context: Context, views: List<ControllerView>, night: Boolean = context.isNight()): Notification {
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_controller)
+            .setColor(headerColor(night))
             .setContentTitle(if (views.isEmpty()) "No controllers" else summary(views))
             .setContentIntent(openAppIntent(context))
             .setOngoing(true)
@@ -147,6 +160,7 @@ object BatteryAlertNotification {
         val level = reading.percent?.let { BatteryText.level(it) }
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_controller)
+            .setColor(headerColor(context.isNight()))
             .setLargeIcon(Icon.createWithBitmap(controllerBitmap(context, view.color)))
             .setContentTitle(view.title)
             .setContentText(if (level != null) "$what · $level" else what)

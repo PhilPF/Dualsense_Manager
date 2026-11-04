@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -29,6 +30,7 @@ class LightKeeperService : Service() {
     private var stopJob: Job? = null
     private var inForeground = false
     private var shown: List<ControllerView>? = null
+    private var shownNight = false
 
     private val app: DualsenseApp get() = application as DualsenseApp
 
@@ -38,11 +40,7 @@ class LightKeeperService : Service() {
         KeeperNotification.ensureChannel(this)
         scope.launch {
             app.connected.collect { views ->
-                if (inForeground && views != shown) {
-                    shown = views
-                    getSystemService(NotificationManager::class.java)
-                        .notify(KeeperNotification.ID, KeeperNotification.build(this@LightKeeperService, views))
-                }
+                if (inForeground && views != shown) show(views, isNight())
                 if (views.isEmpty()) scheduleStop() else cancelStop()
             }
         }
@@ -58,6 +56,7 @@ class LightKeeperService : Service() {
             )
             inForeground = true
             shown = views
+            shownNight = isNight()
             START_STICKY
         } catch (e: RuntimeException) {
             // Only reachable after a restart by the system that is not allowed to go foreground.
@@ -65,6 +64,20 @@ class LightKeeperService : Service() {
             stopSelf()
             START_NOT_STICKY
         }
+    }
+
+    /** The system switched between light and dark: the header icon's circle follows. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val night = newConfig.isNightModeActive
+        if (inForeground && night != shownNight) show(app.connected.value, night)
+    }
+
+    private fun show(views: List<ControllerView>, night: Boolean) {
+        shown = views
+        shownNight = night
+        getSystemService(NotificationManager::class.java)
+            .notify(KeeperNotification.ID, KeeperNotification.build(this, views, night))
     }
 
     private fun scheduleStop() {

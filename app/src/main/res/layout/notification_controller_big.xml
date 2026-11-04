@@ -35,15 +35,6 @@
             android:importantForAccessibility="no"
             android:scaleType="fitCenter"
             android:src="@drawable/ic_art_lines_bold" />
-
-        <ImageView
-            android:id="@+id/n_strips"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_margin="9dp"
-            android:importantForAccessibility="no"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_art_strips" />
     </FrameLayout>
 
     <TextView

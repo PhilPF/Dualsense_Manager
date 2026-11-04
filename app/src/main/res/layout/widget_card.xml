@@ -49,14 +49,6 @@
                 android:importantForAccessibility="no"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_art_lines" />
-
-            <ImageView
-                android:id="@+id/card_strips"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:importantForAccessibility="no"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_art_strips" />
         </FrameLayout>
 
         <TextView

@@ -15,7 +15,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
 import kotlin.math.hypot
 import com.philpf.dualsensemanager.core.ControllerPart
@@ -24,7 +23,7 @@ import com.philpf.dualsensemanager.core.Sticks
 /*
  * The controller drawing is adapted from design/dualsense.svg of daidr/dualsense-tester
  * (https://github.com/daidr/dualsense-tester): the PlayStation logo, the triggers and the
- * touch markers were left out, a plain PS button and the light strips were added.
+ * touch markers were left out and a plain PS button was added.
  *
  * MIT License
  *
@@ -50,8 +49,8 @@ import com.philpf.dualsensemanager.core.Sticks
  */
 
 /**
- * A DualSense seen from the front, drawn in [ink], with the light strips beside the touchpad
- * glowing in [light]. When [lit] is false the strips show the colour faintly, without the glow.
+ * A DualSense seen from the front, drawn in [ink], its touchpad glowing in [light] while the
+ * controller's light is on ([lit]).
  * Buttons in [pressed] light up in the controller's colour, and the sticks follow [sticks]
  * (read while drawing, so moving them only redraws).
  */
@@ -417,15 +416,6 @@ private val Parts: Map<ControllerPart, PartShape> = mapOf(
     ),
 )
 
-private val Strips: List<Path> = listOf(
-    svgPath(
-        "M300,200 C306,240 318,300 330,345 C338,380 368,409 405,411",
-    ),
-    svgPath(
-        "M818.2,200 C812.2,240 800.2,300 788.2,345 C780.2,380 750.2,409 713.2,411",
-    ),
-)
-
 private val TouchpadArea = Parts.getValue(ControllerPart.TOUCHPAD).area
 private val TouchpadCenter = Offset(559f, 265f)
 private val StickCenters = mapOf(
@@ -446,7 +436,7 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
 
     drawPath(Body, ink.copy(alpha = ink.alpha * 0.07f))
     if (lit) {
-        // The touchpad catches the light of the strips around it.
+        // The touchpad glows in the light's colour.
         clipPath(TouchpadArea) {
             drawRect(
                 brush = Brush.radialGradient(
@@ -504,16 +494,5 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
         drawCircle(ink, radius = STICK_RING, center = stick.center, style = line)
         if (!stick.clicked && stick.tilt == 0f) drawCircle(ink.copy(alpha = ink.alpha * 0.14f), radius = STICK_CAP, center = stick.cap)
         drawCircle(ink, radius = STICK_CAP, center = stick.cap, style = line)
-    }
-
-    for (strip in Strips) {
-        if (lit) {
-            drawPath(strip, light.copy(alpha = 0.13f), style = Stroke(76f, cap = StrokeCap.Round))
-            drawPath(strip, light.copy(alpha = 0.30f), style = Stroke(42f, cap = StrokeCap.Round))
-            drawPath(strip, light, style = Stroke(19f, cap = StrokeCap.Round))
-            drawPath(strip, lerp(light, Color.White, 0.8f), style = Stroke(6.5f, cap = StrokeCap.Round))
-        } else {
-            drawPath(strip, light.copy(alpha = 0.5f), style = Stroke(11f, cap = StrokeCap.Round))
-        }
     }
 }

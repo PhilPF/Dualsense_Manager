@@ -129,7 +129,7 @@ class ControllersWidget : AppWidgetProvider() {
             val view = views[index]
             val card = RemoteViews(context.packageName, R.layout.widget_card)
             val color = OPAQUE or view.color
-            for (id in intArrayOf(R.id.card_glow, R.id.card_touchpad, R.id.card_strips)) card.setInt(id, "setColorFilter", color)
+            for (id in intArrayOf(R.id.card_glow, R.id.card_touchpad)) card.setInt(id, "setColorFilter", color)
             card.setTextViewText(R.id.card_name, view.title)
             val battery = view.live?.battery
             card.setTextViewText(R.id.card_level, BatteryText.level(battery))

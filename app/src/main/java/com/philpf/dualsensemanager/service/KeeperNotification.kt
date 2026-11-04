@@ -32,7 +32,7 @@ internal fun openAppIntent(context: Context): PendingIntent = PendingIntent.getA
 
 /**
  * A controller as the app draws it, for a notification's picture: its lines over a glow of
- * [color], with the touchpad and light strips lit in it. Square, [size] pixels a side.
+ * [color], with the touchpad lit in it. Square, [size] pixels a side.
  */
 internal fun controllerBitmap(context: Context, color: Int, size: Int = 192): Bitmap {
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -52,7 +52,6 @@ internal fun controllerBitmap(context: Context, color: Int, size: Int = 192): Bi
     val top = (size - height) / 2
     layer(R.drawable.ic_art_touchpad, true, left, top, left + width, top + height)
     layer(R.drawable.ic_art_lines_bold, false, left, top, left + width, top + height)
-    layer(R.drawable.ic_art_strips, true, left, top, left + width, top + height)
     return bitmap
 }
 
@@ -124,7 +123,7 @@ object KeeperNotification {
     private fun item(context: Context, view: ControllerView, big: Boolean): RemoteViews {
         val item = RemoteViews(context.packageName, if (big) R.layout.notification_controller_big else R.layout.notification_controller_small)
         val color = OPAQUE or view.color
-        for (id in intArrayOf(R.id.n_glow, R.id.n_touchpad, R.id.n_strips)) item.setInt(id, "setColorFilter", color)
+        for (id in intArrayOf(R.id.n_glow, R.id.n_touchpad)) item.setInt(id, "setColorFilter", color)
         val battery = view.live?.battery
         item.setTextViewText(R.id.n_level, BatteryText.level(battery))
         val charging = battery?.status == ChargeStatus.CHARGING || battery?.status == ChargeStatus.FULL

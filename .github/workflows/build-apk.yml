@@ -1,8 +1,12 @@
 name: Build APK
 
-# Manual only: run it from the Actions tab ("Build APK" > "Run workflow").
+# Runs from the Actions tab ("Build APK" > "Run workflow"), and on pushes to Claude's
+# development branches so every change there is compiled and tested.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - "claude/**"
 
 permissions:
   contents: write # needed to update the debug-build release below

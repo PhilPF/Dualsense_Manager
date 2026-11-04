@@ -13,7 +13,7 @@ jobs:
           SDKM=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
           echo "== available"
           $SDKM --list 2>/dev/null | grep -E "^ *(sources|platforms);android-3[4-9]" | sort -u || true
-          yes | $SDKM "sources;android-37" "platforms;android-37" > /dev/null 2>&1 || true
+          yes | $SDKM "sources;android-37.2" > /dev/null 2>&1 || true
           ls $ANDROID_HOME/sources $ANDROID_HOME/platforms || true
           cat > /tmp/notes.py <<'PY'
           import re, sys
@@ -24,6 +24,8 @@ jobs:
                   print('-' * 70)
                   print(m.group(1)); print(m.group(2).strip()); print(m.group(3))
           PY
-          S=$ANDROID_HOME/sources/android-37
+          S=$ANDROID_HOME/sources/android-37.2
+          ls $S/android/bluetooth | head -5 || true
           python3 /tmp/notes.py $S/android/bluetooth/BluetoothDevice.java disconnect,connect,disconnectAcl || true
-          python3 /tmp/notes.py $S/android/companion/CompanionDeviceManager.java removeBond,associate || true
+          python3 /tmp/notes.py $S/android/companion/CompanionDeviceManager.java removeBond || true
+          python3 /tmp/notes.py $S/android/companion/AssociationInfo.java getDeviceMacAddress || true

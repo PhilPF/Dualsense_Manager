@@ -48,7 +48,8 @@ private const val OPAQUE = 0xFF shl 24
 /**
  * One controller: who plays with it (tap a player to give them this controller, long-press to
  * edit them, + to add one) and its light colour. Its drawing shows the buttons being pressed
- * and where the sticks are.
+ * and where the sticks are. A controller that is not connected shows when it was last seen and
+ * can only be forgotten.
  */
 @Composable
 fun ColumnScope.ControllerSheetContent(
@@ -127,6 +128,22 @@ fun ColumnScope.ControllerSheetContent(
         )
     }
 
+    if (live == null) {
+        // A controller that is not connected keeps its settings until it is back; it can only
+        // be forgotten.
+        Spacer(Modifier.height(22.dp))
+        GlassButton(
+            text = "Forget",
+            onClick = {
+                source.forget(view.id)
+                onClose()
+            },
+            textColor = glass.danger,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        return
+    }
+
     Spacer(Modifier.height(24.dp))
     SectionLabel("Player")
     Row(
@@ -166,19 +183,6 @@ fun ColumnScope.ControllerSheetContent(
             onClick = { source.useAutomaticColor(view.id) },
             modifier = Modifier.fillMaxWidth(),
             textColor = Color(OPAQUE or view.color).onGlass(glass),
-        )
-    }
-
-    if (live == null) {
-        Spacer(Modifier.height(22.dp))
-        GlassButton(
-            text = "Forget",
-            onClick = {
-                source.forget(view.id)
-                onClose()
-            },
-            textColor = glass.danger,
-            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

@@ -39,6 +39,8 @@ shot controller-dark --es theme dark --es open demo-1
 # Its sheet shows the buttons held and where the sticks are.
 shot sticks-dark --es theme dark --es open demo-1 --es press CROSS,R1 --es sticks 0.75,-0.55,-0.3,0.85
 shot controller-light --es theme light --es open demo-2
+# A controller that is not connected: when it was last seen, and Forget.
+shot remembered-dark --es theme dark --es open demo-3
 shot settings-light --es theme light --es open settings
 shot widget --es theme light --es open widget
 # Swipe down on the first widget: the next controller's card, its pill's thumb one dot down.

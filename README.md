@@ -44,10 +44,12 @@ lights and read its battery).
   name, battery and connection. Swipe down to snap to the next one; a pill on its right has a
   dot per controller in its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
   notification showing the controllers the same way.
-- **App icon.** The controller in lines over coloured lights behind glass. With "Controllers'
-  colours" on in Settings, the icon takes the colours of the connected controllers.
+- **App icon.** The controller in white lines on black; notifications show it too. With
+  "Controllers' colours" on in Settings, the icon takes the colours of the connected
+  controllers, as lights behind glass.
 - **Remembered controllers.** Controllers that are not connected stay listed, dimmed, with
-  when they were last seen; "Forget" frees their number and colour.
+  when they were last seen. Their settings wait until they are back; "Forget" frees their
+  number and colour.
 - **Light and dark, and a monospaced font**, in Settings.
 
 ## Design
@@ -91,7 +93,9 @@ redrawing.
   dead zone: a position v with |v| = m becomes 0 when m < 0.08, else
   v/m · min(1, (m − 0.08)/0.92), so it keeps its direction and its length is continuous.
 - **App icon.** Android has no way to draw a new launcher icon, only to switch between icons
-  an app ships. `tools/app_icons.py` generates one for every set of 1 to 4 of the 9 preset
+  an app ships. `tools/app_icons.py` generates the plain icon, which is also the application's
+  own icon (newer Android versions and some makers' skins show that one in notifications,
+  rather than the small icon), and one for every set of 1 to 4 of the 9 preset
   colours (255 icons, each an `activity-alias` of MainActivity); `core/AppIconChoice` maps the
   connected controllers' colours to their nearest presets and picks one, and `device/AppIcon`
   enables it and disables the old one. That closes the app's window, so it waits until the

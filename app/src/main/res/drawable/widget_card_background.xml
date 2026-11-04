@@ -1,16 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A card in the widget's stack: opaque, so the cards behind it show only as a deck's edges. -->
+<!-- A card of the widget's stack: opaque, edge to edge (the widget's panel rounds and clips it). -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="@color/widget_ripple">
     <item>
         <shape android:shape="rectangle">
-            <corners android:radius="18dp" />
             <solid android:color="@color/widget_card" />
-            <stroke android:width="1dp" android:color="@color/widget_rim" />
         </shape>
     </item>
     <item android:id="@android:id/mask">
         <shape android:shape="rectangle">
-            <corners android:radius="18dp" />
             <solid android:color="#FFFFFFFF" />
         </shape>
     </item>

@@ -68,7 +68,7 @@ fun RemoteViewsPreview(views: List<ControllerView>) {
 private fun WidgetPreview(views: List<ControllerView>, size: SizeF) {
     AndroidView(
         // A widget's stack only fills inside an AppWidgetHostView, as on a home screen.
-        factory = { context -> AppWidgetHostView(context).apply { updateAppWidget(ControllersWidget.remoteViews(context, views)) } },
+        factory = { context -> AppWidgetHostView(context).apply { updateAppWidget(ControllersWidget.remoteViews(context, views, size)) } },
         modifier = Modifier.size(width = size.width.dp, height = size.height.dp),
     )
 }

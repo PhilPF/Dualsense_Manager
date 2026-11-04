@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The controller's light behind its drawing; ControllersWidget tints it with the colour. -->
+<!-- The controller's light behind its drawing, across the whole card; tinted with its colour. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <corners android:radius="18dp" />
     <gradient
         android:centerX="0.5"
-        android:centerY="0.38"
+        android:centerY="0.36"
         android:endColor="#00FFFFFF"
-        android:gradientRadius="70%"
+        android:gradientRadius="72%"
         android:startColor="@color/widget_glow"
         android:type="radial" />
 </shape>

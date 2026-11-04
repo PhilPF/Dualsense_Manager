@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The 1 × 1 widget: a stack with a card per connected controller. Swiping down snaps to the
-     next one. ControllersWidget fills it. -->
+<!-- The 1 x 1 widget: a stack with a card per connected controller; swiping down snaps to the
+     next. ControllersWidget sizes and places the stack so that its front card covers the panel
+     and the cards behind fall outside it, where the panel clips them. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
+    android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background"
-    android:padding="3dp">
+    android:background="@drawable/widget_panel"
+    android:clipToOutline="true"
+    android:foreground="@drawable/widget_panel_rim">
 
     <StackView
         android:id="@+id/widget_stack"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:loopViews="true" />
+        android:layout_gravity="top|left"
+        android:loopViews="true"
+        android:theme="@style/WidgetStackTheme" />
 
     <LinearLayout
         android:id="@+id/widget_empty"
@@ -20,7 +24,7 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="8dp">
+        android:padding="10dp">
 
         <ImageView
             android:layout_width="match_parent"
@@ -29,7 +33,7 @@
             android:alpha="0.45"
             android:importantForAccessibility="no"
             android:scaleType="fitCenter"
-            android:src="@drawable/ic_art_lines_bold" />
+            android:src="@drawable/ic_art_lines" />
 
         <TextView
             android:layout_width="match_parent"

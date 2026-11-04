@@ -8,4 +8,13 @@
         <item name="android:windowLightNavigationBar">@bool/light_bars</item>
         <item name="android:windowSplashScreenBackground">@color/background</item>
     </style>
+
+    <!-- The widget's stack: StackView takes the colour of its swipe and tap outlines from the
+         theme's stackViewStyle (the colours themselves are not public). An empty style leaves
+         them at 0, so no outline is drawn. -->
+    <style name="WidgetStackTheme">
+        <item name="android:stackViewStyle">@style/WidgetStackView</item>
+    </style>
+
+    <style name="WidgetStackView" />
 </resources>

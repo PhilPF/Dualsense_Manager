@@ -26,6 +26,10 @@ jobs:
           PY
           S=$ANDROID_HOME/sources/android-37.2
           ls $S/android/bluetooth | head -5 || true
-          python3 /tmp/notes.py $S/android/bluetooth/BluetoothDevice.java disconnect,connect,disconnectAcl || true
-          python3 /tmp/notes.py $S/android/companion/CompanionDeviceManager.java removeBond || true
-          python3 /tmp/notes.py $S/android/companion/AssociationInfo.java getDeviceMacAddress || true
+          F=$S/android/bluetooth/BluetoothDevice.java
+          for m in "disconnect()" "connect()" "disconnectAcl" "isConnected()"; do
+            for n in $(grep -n "public .*[ .]${m}" $F | cut -d: -f1); do
+              echo "=================== $m at line $n"
+              sed -n "$((n-60)),$((n+2))p" $F
+            done
+          done

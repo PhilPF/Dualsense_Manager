@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Debug builds can show sample controllers, for screenshots: --ez demo true
-        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget]
+        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget|order]
         // [--es press CROSS,L1] [--es sticks leftX,leftY,rightX,rightY], on the first sample,
         // [--ez mono true] for the monospaced font.
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0

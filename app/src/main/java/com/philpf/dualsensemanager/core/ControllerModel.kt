@@ -39,6 +39,10 @@ data class ControllerProfile(
     val lastSeen: Long = 0L,
     /** Last battery percentage reported while connected, or -1 if none. */
     val lastBattery: Int = -1,
+    /** How fast its battery drains while connected, learned over time, in % per hour; 0 if not yet. */
+    val drainRate: Float = 0f,
+    /** How fast it charges, learned over time, in % per hour; 0 if not yet. */
+    val chargeRate: Float = 0f,
 ) {
     /** "DualSense 2", "DualSense Edge 3", ... */
     val defaultName: String get() = "${kind.label} $number"
@@ -61,6 +65,8 @@ data class LiveController(
     val battery: BatteryReading?,
     /** Whether Android lets apps set this controller's light bar. */
     val lightBar: Boolean,
+    /** About how long until its battery is empty, or full while charging; null if not known yet. */
+    val eta: BatteryEta? = null,
 )
 
 /** A controller as shown to the user: what is remembered, who plays with it, and its live state. */

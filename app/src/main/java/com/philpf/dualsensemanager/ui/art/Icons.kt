@@ -19,13 +19,18 @@ import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
 
 // Small icons on a 24-unit grid, drawn directly so they stay crisp without an icon library.
-// The gear and the bin follow the shapes of Google's Material Icons (Apache License 2.0).
+// The gear, the bin and the numbered list follow the shapes of Google's Material Icons
+// (Apache License 2.0).
 
 private fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
 
 private val BluetoothPath = svgPath("M7 7 L17 17 L12 22 L12 2 L17 7 L7 17")
 private val BoltPath = svgPath("M13.5 2 L4.5 13.5 L11 13.5 L10 22 L19.5 10 L13 10 Z")
 private val ChevronPath = svgPath("M9 5 L16 12 L9 19")
+private val NumberedListPath = svgPath(
+    "M2 17h2v.5H3v1h1v.5H2v1h3v-4H2v1zm1-9h1V4H2v1h1v3zm-1 3h1.8L2 13.1v.9h3v-1H3.2L5 10.9V10H2v1z" +
+        "m5-6v2h14V5H7zm0 14h14v-2H7v2zm0-6h14v-2H7v2z",
+)
 private val GearPath = svgPath(
     "M19.14,12.94c0.04,-0.3 0.06,-0.61 0.06,-0.94c0,-0.32 -0.02,-0.64 -0.07,-0.94l2.03,-1.58" +
         "c0.18,-0.14 0.23,-0.41 0.12,-0.61l-1.92,-3.32c-0.12,-0.22 -0.37,-0.29 -0.59,-0.22l-2.39,0.96" +
@@ -79,6 +84,12 @@ fun ChevronIcon(tint: Color, modifier: Modifier = Modifier.size(16.dp)) = Icon24
 @Composable
 fun GearIcon(tint: Color, modifier: Modifier = Modifier.size(22.dp)) = Icon24(modifier) {
     drawPath(GearPath, tint)
+}
+
+/** Putting the controllers in order: a numbered list. */
+@Composable
+fun OrderIcon(tint: Color, modifier: Modifier = Modifier.size(22.dp)) = Icon24(modifier) {
+    drawPath(NumberedListPath, tint)
 }
 
 @Composable

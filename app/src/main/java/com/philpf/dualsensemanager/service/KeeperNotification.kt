@@ -15,6 +15,7 @@ import android.widget.RemoteViews
 import com.philpf.dualsensemanager.MainActivity
 import com.philpf.dualsensemanager.R
 import com.philpf.dualsensemanager.core.BatteryAlert
+import com.philpf.dualsensemanager.core.BatteryForecast
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
@@ -128,7 +129,15 @@ object KeeperNotification {
         item.setTextViewText(R.id.n_level, BatteryText.level(battery))
         val charging = battery?.status == ChargeStatus.CHARGING || battery?.status == ChargeStatus.FULL
         item.setViewVisibility(R.id.n_bolt, if (charging) View.VISIBLE else View.GONE)
-        if (big) item.setTextViewText(R.id.n_name, view.title)
+        if (big) {
+            item.setTextViewText(R.id.n_name, view.title)
+            val eta = view.live?.eta
+            item.setViewVisibility(R.id.n_time, if (eta != null) View.VISIBLE else View.GONE)
+            if (eta != null) {
+                item.setTextViewText(R.id.n_time, BatteryForecast.short(eta.minutes))
+                item.setContentDescription(R.id.n_time, BatteryForecast.spoken(eta))
+            }
+        }
         return item
     }
 }

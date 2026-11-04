@@ -64,15 +64,37 @@ object Numbering {
         val numbers = ids.map { profiles.getValue(it).number }.sorted()
         val next = profiles.toMutableMap()
         ids.forEachIndexed { i, id -> next[id] = next.getValue(id).copy(number = numbers[i]) }
-        val recolour = ids.map { next.getValue(it) }.filter { !it.customColor }.sortedBy { it.number }
+        recolour(next, ids, playerColors)
+        return next
+    }
+
+    /**
+     * Numbers every controller 1, 2, 3, ...: those in [order] first, in that order, then the
+     * others in their current order. Automatic colours follow the numbers, as in [reorder].
+     */
+    fun ranked(
+        profiles: Map<String, ControllerProfile>,
+        order: List<String>,
+        playerColors: Collection<Int>,
+    ): Map<String, ControllerProfile> {
+        val first = order.distinct().filter { it in profiles }
+        val ids = first + profiles.values.filter { it.id !in first }.sortedBy { it.number }.map { it.id }
+        val next = profiles.toMutableMap()
+        ids.forEachIndexed { i, id -> next[id] = next.getValue(id).copy(number = i + 1) }
+        recolour(next, ids, playerColors)
+        return next
+    }
+
+    /** Gives the controllers among [ids] with automatic colours the colours of their numbers. */
+    private fun recolour(profiles: MutableMap<String, ControllerProfile>, ids: List<String>, playerColors: Collection<Int>) {
+        val recolour = ids.map { profiles.getValue(it) }.filter { !it.customColor }.sortedBy { it.number }
         val recolourIds = recolour.mapTo(HashSet()) { it.id }
-        val taken = (next.values.filter { it.id !in recolourIds }.map { it.color } + playerColors).toMutableList()
+        val taken = (profiles.values.filter { it.id !in recolourIds }.map { it.color } + playerColors).toMutableList()
         for (p in recolour) {
             val color = LedPalette.automaticColor(p.number, taken)
             taken += color
-            next[p.id] = p.copy(color = color)
+            profiles[p.id] = p.copy(color = color)
         }
-        return next
     }
 
     /** [list] with the item at [from] moved to [to]. */

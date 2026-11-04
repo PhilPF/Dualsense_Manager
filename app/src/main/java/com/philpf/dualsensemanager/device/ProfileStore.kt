@@ -110,6 +110,14 @@ class ProfileStore(context: Context, name: String = "controllers") {
         }
     }
 
+    /** Numbers all controllers from 1, those in [order] first; see [Numbering.ranked]. */
+    fun rank(order: List<String>) {
+        synchronized(lock) {
+            val next = Numbering.ranked(_profiles.value, order, _players.value.values.map { it.color })
+            if (next != _profiles.value) writeProfiles(next)
+        }
+    }
+
     /** Gives [playerId] (or nobody) to [controllerId]; the player leaves any other controller. */
     fun assignPlayer(controllerId: String, playerId: String?) {
         synchronized(lock) {

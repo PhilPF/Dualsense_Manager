@@ -18,6 +18,8 @@ object ProfileCodec {
             p.playerId.orEmpty(),
             p.lastSeen.toString(),
             p.lastBattery.toString(),
+            p.drainRate.toString(),
+            p.chargeRate.toString(),
         )
     }
 
@@ -57,8 +59,13 @@ object ProfileCodec {
             playerId = f[5].ifEmpty { null },
             lastSeen = f[6].toLongOrNull() ?: 0L,
             lastBattery = f[7].toIntOrNull() ?: -1,
+            // Added later: absent in older data.
+            drainRate = rate(f.getOrNull(8)),
+            chargeRate = rate(f.getOrNull(9)),
         )
     }
+
+    private fun rate(field: String?): Float = field?.toFloatOrNull()?.takeIf { it.isFinite() && it > 0f } ?: 0f
 }
 
 object PlayerCodec {

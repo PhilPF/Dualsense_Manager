@@ -1,6 +1,7 @@
 package com.philpf.dualsensemanager.device
 
 import android.content.IntentSender
+import com.philpf.dualsensemanager.core.BatteryEta
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerKind
@@ -40,8 +41,14 @@ class DemoSource : ControllerSource {
 
     private val _live = MutableStateFlow(
         listOf(
-            LiveController("demo-1", FIRST_DEVICE_ID, ControllerKind.DUALSENSE, Transport.BLUETOOTH, BatteryReading(55, ChargeStatus.DISCHARGING), true),
-            LiveController("demo-2", 2, ControllerKind.DUALSENSE, Transport.USB, BatteryReading(25, ChargeStatus.CHARGING), true),
+            LiveController(
+                "demo-1", FIRST_DEVICE_ID, ControllerKind.DUALSENSE, Transport.BLUETOOTH,
+                BatteryReading(55, ChargeStatus.DISCHARGING), true, BatteryEta(200, charging = false),
+            ),
+            LiveController(
+                "demo-2", 2, ControllerKind.DUALSENSE, Transport.USB,
+                BatteryReading(25, ChargeStatus.CHARGING), true, BatteryEta(110, charging = true),
+            ),
         ),
     )
     override val live: StateFlow<List<LiveController>> = _live.asStateFlow()
@@ -93,6 +100,12 @@ class DemoSource : ControllerSource {
     override fun reorder(order: List<String>) {
         _profiles.update { Numbering.reorder(it, order, _players.value.values.map { p -> p.color }) }
     }
+
+    override fun numberInOrder(order: List<String>) {
+        _profiles.update { Numbering.ranked(it, order, _players.value.values.map { p -> p.color }) }
+    }
+
+    override fun nudge(controllerId: String) = Unit
 
     override fun deletePlayer(playerId: String) {
         _profiles.update { Players.unassign(it, playerId) }

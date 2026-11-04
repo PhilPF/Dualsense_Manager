@@ -41,6 +41,9 @@ shot sticks-dark --es theme dark --es open demo-1 --es press CROSS,R1 --es stick
 shot controller-light --es theme light --es open demo-2
 # A controller that is not connected: when it was last seen, and Forget.
 shot remembered-dark --es theme dark --es open demo-3
+# Putting the controllers in order: the first sample pressed a button and became number 1;
+# the bar asks for player 2.
+shot order-dark --es theme dark --es open order --es press CROSS
 shot settings-light --es theme light --es open settings
 shot widget --es theme light --es open widget
 # Swipe down on the first widget: the next controller's card, its pill's thumb one dot down.

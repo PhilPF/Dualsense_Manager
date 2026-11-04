@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -67,13 +69,16 @@ import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.ControllerViews
 import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Players
+import com.philpf.dualsensemanager.core.PressOrder
 import com.philpf.dualsensemanager.core.ThemeMode
 import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
 import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.service.LightKeeperService
 import com.philpf.dualsensemanager.ui.art.BluetoothIcon
+import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.GearIcon
+import com.philpf.dualsensemanager.ui.art.OrderIcon
 import com.philpf.dualsensemanager.ui.glass.Backdrop
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
 import com.philpf.dualsensemanager.ui.glass.GlassSurface
@@ -90,10 +95,14 @@ private const val OPAQUE = 0xFF shl 24
 /** Opens the settings sheet when passed as the initially open sheet. */
 const val OPEN_SETTINGS = "settings"
 
+/** Starts putting the controllers in order when passed as the initially open sheet. */
+const val OPEN_ORDER = "order"
+
 /**
  * The one screen: a cell per controller, each glowing in its light colour, under a floating
  * glass bar; sheets for a controller, a player and settings. Long-press and drag a connected
- * controller to move it: controllers are numbered in this order. Pressing anything on a
+ * controller to move it: controllers are numbered in this order. Or put them in order from
+ * the bar: each player presses a button on their controller in turn. Pressing anything on a
  * controller floods its cell with its colour; its sheet shows which buttons are pressed and
  * where the sticks are.
  *
@@ -129,7 +138,7 @@ fun MainScreen(
     fun pressedOf(view: ControllerView): Set<ControllerPart> = view.live?.let { pressed[it.deviceId] } ?: emptySet()
 
     // Controller sheet. shownId keeps its content during the closing animation.
-    var openId by rememberSaveable { mutableStateOf(initiallyOpen?.takeIf { it != OPEN_SETTINGS }) }
+    var openId by rememberSaveable { mutableStateOf(initiallyOpen?.takeIf { it != OPEN_SETTINGS && it != OPEN_ORDER }) }
     var shownId by rememberSaveable { mutableStateOf(openId) }
     var settingsOpen by rememberSaveable { mutableStateOf(initiallyOpen == OPEN_SETTINGS) }
     val openView = views.firstOrNull { it.id == openId }
@@ -175,6 +184,30 @@ fun MainScreen(
             openAppSettings(context)
         }
     }
+
+    // Putting the controllers in order by pressing: each connected controller's first press
+    // takes the next number, and its player lights and place in the list follow at once.
+    var ordering by remember { mutableStateOf(if (initiallyOpen == OPEN_ORDER) PressOrder() else null) }
+    val latestViews by rememberUpdatedState(views)
+    LaunchedEffect(ordering != null) {
+        if (ordering == null) return@LaunchedEffect
+        var seen = input.presses.value
+        input.presses.collect { counts ->
+            val fresh = counts.filter { (device, count) -> count > (seen[device] ?: 0) }.keys
+            seen = counts
+            for (device in fresh) {
+                val view = latestViews.firstOrNull { it.live?.deviceId == device } ?: continue
+                val current = ordering ?: break
+                val next = current.press(view.id)
+                if (next == current) continue
+                ordering = next
+                source.numberInOrder(next.order(latestViews.map { it.id }))
+                source.nudge(view.id)
+            }
+            if (ordering?.complete(latestViews.filter { it.isConnected }.map { it.id }) == true) ordering = null
+        }
+    }
+    BackHandler(enabled = ordering != null) { ordering = null }
 
     // Reordering connected controllers by dragging.
     val pitch = with(LocalDensity.current) { (CellHeight + CellGap).toPx() }
@@ -284,6 +317,10 @@ fun MainScreen(
             showPermission = !nearbyGranted,
             onPermission = askAgain,
             onSettings = { settingsOpen = true },
+            ordering = ordering?.next,
+            canOrder = connectedIds.size >= 2,
+            onOrder = { ordering = PressOrder() },
+            onStopOrdering = { ordering = null },
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
@@ -336,13 +373,21 @@ fun MainScreen(
     }
 }
 
-/** Floating glass capsule: the app's name, and buttons for permissions (when missing) and settings. */
+/**
+ * Floating glass capsule: the app's name, and buttons for permissions (when missing), putting the
+ * controllers in order (with two or more connected) and settings. While [ordering], it asks for
+ * a press for that place instead.
+ */
 @Composable
 private fun TopBar(
     backdrop: Backdrop,
     showPermission: Boolean,
     onPermission: () -> Unit,
     onSettings: () -> Unit,
+    ordering: Int?,
+    canOrder: Boolean,
+    onOrder: () -> Unit,
+    onStopOrdering: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalGlass.current
@@ -359,26 +404,44 @@ private fun TopBar(
             Modifier.fillMaxSize().padding(start = 22.dp, end = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Dualsense Manager",
-                style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-            if (showPermission) {
-                GlassIconButton(onClick = onPermission, label = "Allow Nearby devices") {
-                    BluetoothIcon(glass.danger, Modifier.size(18.dp))
+            if (ordering != null) {
+                Text(
+                    text = "Player $ordering · press any button",
+                    style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                GlassIconButton(onClick = onStopOrdering, label = "Done") {
+                    CloseIcon(glass.textPrimary, Modifier.size(16.dp))
                 }
-                Spacer(Modifier.width(6.dp))
-            }
-            GlassIconButton(onClick = onSettings, label = "Settings") {
-                GearIcon(glass.textPrimary, Modifier.size(22.dp))
+            } else {
+                Text(
+                    text = "Dualsense Manager",
+                    style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (canOrder) {
+                    GlassIconButton(onClick = onOrder, label = "Put in order by pressing a button") {
+                        OrderIcon(glass.textPrimary, Modifier.size(21.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (showPermission) {
+                    GlassIconButton(onClick = onPermission, label = "Allow Nearby devices") {
+                        BluetoothIcon(glass.danger, Modifier.size(18.dp))
+                    }
+                    Spacer(Modifier.width(6.dp))
+                }
+                GlassIconButton(onClick = onSettings, label = "Settings") {
+                    GearIcon(glass.textPrimary, Modifier.size(22.dp))
+                }
             }
         }
     }
 }
 
-/** The system's Bluetooth settings (or all settings, when that page is missing). */
 /**
  * The controller's own page in the system's Bluetooth settings (Android's Settings app), whose
  * "Disconnect" button turns it off. The list of Bluetooth devices instead when its [address] is
@@ -408,6 +471,7 @@ private const val ACTION_DEVICE_PAGE = "com.android.settings.BLUETOOTH_DEVICE_DE
 private const val EXTRA_PAGE_ARGUMENTS = ":settings:show_fragment_args"
 private const val KEY_DEVICE_ADDRESS = "device_address"
 
+/** The system's Bluetooth settings (or all settings, when that page is missing). */
 internal fun openBluetoothSettings(context: Context) {
     try {
         context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))

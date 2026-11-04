@@ -22,9 +22,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.BatteryReading
+import com.philpf.dualsensemanager.core.BatteryForecast
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerView
@@ -145,7 +148,10 @@ fun ControllerCell(
     }
 }
 
-/** Battery, charging and connection of a connected controller, as icons on one line. */
+/**
+ * Battery, charging and connection of a connected controller, as icons on one line, with about
+ * how long the battery lasts: after the level, or after the bolt for the time to full.
+ */
 @Composable
 fun LiveStatus(live: LiveController, modifier: Modifier = Modifier) {
     val glass = LocalGlass.current
@@ -158,6 +164,15 @@ fun LiveStatus(live: LiveController, modifier: Modifier = Modifier) {
         val status = live.battery?.status
         if (status == ChargeStatus.CHARGING || status == ChargeStatus.FULL) {
             BoltIcon(glass.charging, Modifier.size(15.dp))
+        }
+        live.eta?.let { eta ->
+            Text(
+                text = BatteryForecast.short(eta.minutes),
+                style = GlassType.callout,
+                color = glass.textSecondary,
+                maxLines = 1,
+                modifier = Modifier.semantics { contentDescription = BatteryForecast.spoken(eta) },
+            )
         }
         when (live.transport) {
             Transport.BLUETOOTH -> BluetoothIcon(glass.textSecondary, Modifier.size(15.dp))

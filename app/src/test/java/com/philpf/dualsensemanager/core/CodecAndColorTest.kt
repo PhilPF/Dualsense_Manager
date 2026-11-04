@@ -20,10 +20,19 @@ class CodecAndColorTest {
     @Test
     fun profilesRoundTripKeepEveryField() {
         val profiles = listOf(
-            ControllerProfile("a1b2", 1, ControllerKind.DUALSENSE, 0x0030FF, false, "p-1", 1_700_000_000_000L, 55),
+            ControllerProfile("a1b2", 1, ControllerKind.DUALSENSE, 0x0030FF, false, "p-1", 1_700_000_000_000L, 55, 12.5f, 31.25f),
             ControllerProfile("c3d4", 2, ControllerKind.DUALSENSE_EDGE, 0xFF0A14, true, null, 0L, -1),
         )
         assertEquals(profiles, ProfileCodec.decode(ProfileCodec.encode(profiles)))
+    }
+
+    @Test
+    fun dataFromBeforeLearnedRatesHasNone() {
+        val v2 = "dsm2\nab\t1\tDUALSENSE\t0030ff\t0\t\t5\t45"
+        assertEquals(
+            listOf(ControllerProfile("ab", 1, ControllerKind.DUALSENSE, 0x0030FF, false, null, 5L, 45, 0f, 0f)),
+            ProfileCodec.decode(v2),
+        )
     }
 
     @Test

@@ -19,8 +19,11 @@ import android.view.InputDevice
 import com.philpf.dualsensemanager.core.AlertState
 import com.philpf.dualsensemanager.core.BatteryAlert
 import com.philpf.dualsensemanager.core.BatteryAlerts
+import com.philpf.dualsensemanager.core.BatteryEta
+import com.philpf.dualsensemanager.core.BatteryForecast
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryRules
+import com.philpf.dualsensemanager.core.BatteryTrack
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerKind
 import com.philpf.dualsensemanager.core.ControllerProfile
@@ -85,6 +88,10 @@ class ControllerManager(
     private val pendingApply = HashSet<String>()
     private val blink = HashMap<String, Boolean>()
     private val alertStates = HashMap<String, AlertState>()
+    private val tracks = HashMap<String, BatteryTrack>()
+
+    // The learned rate when each track began, so a connection's own steps are not counted twice.
+    private val priorRates = HashMap<String, Float>()
     private var started = false
 
     @Volatile
@@ -174,6 +181,17 @@ class ControllerManager(
         applyAll()
     }
 
+    override fun numberInOrder(order: List<String>) {
+        store.rank(order)
+        applyAll()
+    }
+
+    override fun nudge(controllerId: String) {
+        handler.post {
+            for (a in attached.values.filter { it.id == controllerId }) vibrate(a.deviceId, NUDGE_TIMINGS, NUDGE_AMPLITUDES)
+        }
+    }
+
     override fun deletePlayer(playerId: String) {
         store.deletePlayer(playerId)
         applyAll()
@@ -192,7 +210,7 @@ class ControllerManager(
         handler.post {
             val targets = attached.values.filter { it.id == controllerId }
             if (targets.isEmpty()) return@post
-            targets.forEach { vibrate(it.deviceId) }
+            targets.forEach { vibrate(it.deviceId, RUMBLE_TIMINGS, RUMBLE_AMPLITUDES) }
             BLINK_STEPS.forEachIndexed { i, on ->
                 handler.postDelayed({
                     if (on == null) blink.remove(controllerId) else blink[controllerId] = on
@@ -242,6 +260,8 @@ class ControllerManager(
             val gone = attached.remove(deviceId) ?: continue
             closeSession(gone)
             alertStates.remove(gone.id)
+            tracks.remove(gone.id)
+            priorRates.remove(gone.id)
             blink.remove(gone.id)
             store.update(gone.id) { it.copy(lastSeen = now) }
         }
@@ -324,12 +344,12 @@ class ControllerManager(
         }
     }
 
-    private fun vibrate(deviceId: Int) {
+    private fun vibrate(deviceId: Int, timings: LongArray, amplitudes: IntArray) {
         val device = inputManager.getInputDevice(deviceId) ?: return
         try {
             val vibrators = device.vibratorManager
             if (vibrators.vibratorIds.isEmpty()) return
-            val effect = VibrationEffect.createWaveform(RUMBLE_TIMINGS, RUMBLE_AMPLITUDES, -1)
+            val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
             vibrators.vibrate(CombinedVibration.createParallel(effect))
         } catch (e: RuntimeException) {
             Log.w(TAG, "Could not rumble ${device.name}", e)
@@ -367,8 +387,32 @@ class ControllerManager(
                 transport = TransportRules.transport(device.name, usbCount),
                 battery = battery,
                 lightBar = rgbLights(device),
+                eta = forecast(a.id, battery, now),
             )
         }
+    }
+
+    /**
+     * Follows the battery's 10 % steps (core/BatteryForecast), learns from each new step how fast
+     * this controller drains or charges, and estimates the time left.
+     */
+    private fun forecast(id: String, battery: BatteryReading?, now: Long): BatteryEta? {
+        val profile = store.get(id) ?: return null
+        val before = tracks[id]
+        val after = BatteryForecast.track(before, battery, now)
+        if (after == null) {
+            tracks.remove(id)
+            priorRates.remove(id)
+            return null
+        }
+        tracks[id] = after
+        val learned = if (after.charging) profile.chargeRate else profile.drainRate
+        if (before == null || before.charging != after.charging) priorRates[id] = learned
+        val next = BatteryForecast.learn(learned, before, after)
+        if (next != learned) {
+            store.update(id) { if (after.charging) it.copy(chargeRate = next) else it.copy(drainRate = next) }
+        }
+        return BatteryForecast.eta(after, priorRates[id] ?: learned, now)
     }
 
     private fun checkAlerts(id: String, battery: BatteryReading?) {
@@ -427,5 +471,9 @@ class ControllerManager(
         // two short breaks so the buzz pulses and is easier to locate by ear.
         val RUMBLE_TIMINGS = longArrayOf(0L, 1_000L, 80L, 1_000L, 80L, 1_200L)
         val RUMBLE_AMPLITUDES = intArrayOf(0, 255, 0, 255, 0, 255)
+
+        /** Two quick taps: "got it". */
+        val NUDGE_TIMINGS = longArrayOf(0L, 90L, 70L, 90L)
+        val NUDGE_AMPLITUDES = intArrayOf(0, 200, 0, 200)
     }
 }

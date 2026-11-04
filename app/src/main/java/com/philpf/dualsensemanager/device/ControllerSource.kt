@@ -54,4 +54,10 @@ interface ControllerSource {
 
     /** Puts controllers in this order, renumbering them (swapping two swaps their numbers). */
     fun reorder(order: List<String>)
+
+    /** Numbers the controllers 1, 2, 3, ... in [order]; the others follow (see core/PressOrder). */
+    fun numberInOrder(order: List<String>)
+
+    /** A short rumble, to tell a controller's holder that something took effect. */
+    fun nudge(controllerId: String)
 }

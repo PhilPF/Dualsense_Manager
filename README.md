@@ -24,7 +24,10 @@ lights and read its battery).
   Without a player a controller is "DualSense n".
 - **Order.** Long-press a connected controller and drag it to move it: controllers are
   numbered in the order shown, so dragging the second above the first swaps their numbers
-  (and their player lights and automatic colours).
+  (and their player lights and automatic colours). Or tap the numbered list in the bar and
+  have each player press any button on their controller in turn, as on a console: the first
+  becomes number 1, the next 2, and so on; each controller buzzes twice when it takes its
+  place, and its player lights show it at once.
 - **Find.** Makes a controller rumble with both motors at full strength (the most Android
   allows) and blink its lights, for about 3.4 seconds.
 - **Which one is this?** While the app is open, pressing anything on a controller floods its
@@ -36,14 +39,15 @@ lights and read its battery).
   Android 12 to 16 the button opens the controller's own page in the system's Bluetooth
   settings, where "Disconnect" is one tap (the list of Bluetooth devices instead, on phones
   whose settings lack that page). Turn it back on with its PS button; it reconnects by itself.
-- **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
-  notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
+- **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, and
+  about how long the battery lasts, or how long until it is full while charging (see How
+  it works); with notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
   charged. Both can be turned off in Settings.
 - **At a glance.** A one-cell home-screen widget: a card per connected controller, filling
   the widget, drawn as in the app (the controller in lines over a glow of its colour) with its
   name, battery and connection. Swipe down to snap to the next one; a pill on its right has a
-  dot per controller in its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
-  notification showing the controllers the same way.
+  dot per controller in its colour and a thumb on the one shown. Also a Quick Settings tile,
+  and the service's notification showing the controllers the same way.
 - **App icon.** The controller in white lines on black; notifications show it too. With
   "Controllers' colours" on in Settings, the icon takes the colours of the connected
   controllers, as lights behind glass.
@@ -83,6 +87,17 @@ redrawing.
   level d in {0, …, 10} and the driver publishes p = min(10d + 5, 100) %, so a reported
   p with p ≡ 5 (mod 10) only says that the charge lies in [p − 5, p + 5). The app shows
   the lower end, p − 5 (e.g. "50%"), a value the charge is guaranteed to reach.
+- **Time left.** The controller reports its charge only as the 10 % band it is in, so the
+  informative moments are the band changes: when the reading drops from the band starting at
+  b, the charge is b (to within the polling delay, 5 s with the app open, 60 s otherwise).
+  Taking the charge as linear in time, the rate is the least-squares slope through the last
+  few such crossings, and the last crossing gives the charge now. Each new step also updates
+  a rate remembered per controller (separately for draining and charging), which stands in
+  until two steps are seen; the charge at the first reading is then only known to lie in its
+  band, and its expected value is used, given that the charge has not left the band yet.
+  Staying in a band for a time D bounds the rate by 10 / D, so the estimate follows when use
+  slows down. It is shown rounded (to 5 min below an hour, 10 min below ten hours) with a
+  "~" (`core/BatteryForecast`, with tests).
 - **Bluetooth or USB.** There is no public API for this. Over USB the kernel names the
   device from its USB strings ("Sony Interactive Entertainment DualSense Wireless
   Controller"), over Bluetooth from its Bluetooth name ("DualSense Wireless Controller");
@@ -175,5 +190,5 @@ Debug builds show sample controllers when started with
 - The controller drawing is adapted from `design/dualsense.svg` in
   [daidr/dualsense-tester](https://github.com/daidr/dualsense-tester), © 2023 Xuezhou
   Dai, MIT License (full notice in `ui/art/ControllerArt.kt`).
-- The settings and delete icons follow Google's Material Icons (Apache License 2.0).
+- The settings, delete and numbered-list icons follow Google's Material Icons (Apache License 2.0).
 - The app icon, widget tiles and notification use the outline of the same drawing.

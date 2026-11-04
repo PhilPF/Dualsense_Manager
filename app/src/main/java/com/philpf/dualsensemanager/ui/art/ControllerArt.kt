@@ -447,21 +447,33 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
             )
         }
     }
-    for (path in Lines) drawPath(path, ink, style = line)
+    // Pressed parts glow under every line: a soft halo, so that even the thin bumpers show at
+    // cell size, and a fill.
     for ((part, shape) in Parts) {
-        if (part in lightUp) {
-            drawPath(shape.area, light.copy(alpha = 0.9f))
-            drawPath(shape.area, lerp(light, Color.White, 0.6f), style = Stroke(6f, join = StrokeJoin.Round))
-        }
+        if (part !in lightUp) continue
+        drawPath(shape.area, light.copy(alpha = 0.22f), style = Stroke(64f, join = StrokeJoin.Round))
+        drawPath(shape.area, light.copy(alpha = 0.42f), style = Stroke(30f, join = StrokeJoin.Round))
+        drawPath(shape.area, light)
+    }
+    for ((part, center) in Sticks) {
+        val clicked = StickClicks.entries.any { it.value == part && it.key in pressed }
+        if (part !in pressed && !clicked) continue
+        val radius = if (clicked) 87.3f else 57.2f
+        drawCircle(light.copy(alpha = 0.22f), radius = radius + 32f, center = center)
+        drawCircle(light.copy(alpha = 0.42f), radius = radius + 15f, center = center)
+        drawCircle(light, radius = radius, center = center)
+    }
+
+    for (path in Lines) drawPath(path, ink, style = line)
+    for (shape in Parts.values) {
         for (path in shape.lines) drawPath(path, ink, style = line)
         for (path in shape.marks) drawPath(path, ink)
     }
     for ((part, center) in Sticks) {
         val clicked = StickClicks.entries.any { it.value == part && it.key in pressed }
-        if (clicked) drawCircle(light.copy(alpha = 0.9f), radius = 87.3f, center = center)
-        drawCircle(ink, radius = 87.3f, center = center, style = line)
         val moved = part in pressed || clicked
-        drawCircle(if (moved) light else ink.copy(alpha = ink.alpha * 0.14f), radius = 57.2f, center = center)
+        drawCircle(ink, radius = 87.3f, center = center, style = line)
+        if (!moved) drawCircle(ink.copy(alpha = ink.alpha * 0.14f), radius = 57.2f, center = center)
         drawCircle(ink, radius = 57.2f, center = center, style = line)
     }
 

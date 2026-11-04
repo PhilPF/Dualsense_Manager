@@ -31,9 +31,11 @@ lights and read its battery).
 - **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
   notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
   charged. Both can be turned off in Settings.
-- **At a glance.** A home-screen widget with a tile per connected controller (its drawing in
-  its colour, name and battery; more controllers scroll), a Quick Settings tile, and the
-  service's notification showing the same.
+- **At a glance.** A home-screen widget with a square tile per connected controller: its
+  drawing in its colour, glowing, with its name and battery below. The tiles are as large as
+  the widget allows while showing every controller (a 3 × 2 widget shows four to six,
+  depending on the home screen); beyond that the tiles scroll. Also a Quick Settings tile, and
+  the service's notification showing the same.
 - **Remembered controllers.** Controllers that are not connected stay listed, dimmed, with
   when they were last seen; "Forget" frees their number and colour.
 - **Light and dark.** System, Light or Dark, in Settings.
@@ -75,6 +77,14 @@ redrawing.
   and if no Sony controller is attached over USB at all (`UsbManager`), all are on
   Bluetooth.
 - **Rumble.** `InputDevice.getVibratorManager()`.
+- **Widget layout** (`core/WidgetGrid.kt`). For n controllers in an area of W × H dp with gaps
+  of g = 4 dp, c columns give r(c) = ⌈n / c⌉ rows and squares of side
+  s(c) = min((W − (c − 1)g) / c, (H − (r(c) − 1)g) / r(c)). With s* = max s(c), if
+  s* ≥ 80 dp the widget shows every tile, taking among the c with
+  s(c) ≥ max(0.9 s*, 80 dp) the one with the fewest empty places c·r(c) − n, then the one with
+  more columns. Otherwise the tiles keep at least 80 dp and the grid scrolls. Android widgets
+  can only scroll vertically, so there is no sideways scrolling. The widget is rebuilt for each
+  size the launcher reports (portrait and landscape) and when it is resized.
 - **Pressed buttons.** The activity receives the controllers' key and joystick events while
   it is in front and maps them to parts of the drawing; it keeps them, so a button such as
   Circle doesn't act as Back in the app.

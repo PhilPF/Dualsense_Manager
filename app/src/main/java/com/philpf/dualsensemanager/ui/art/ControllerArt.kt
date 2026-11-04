@@ -72,9 +72,6 @@ fun ControllerArt(
     }
 }
 
-/** The drawing's width over its height. */
-const val ControllerArtAspect = ART_WIDTH / ART_HEIGHT
-
 /** Where the light bar sits within the drawing, as fractions of its width and height. */
 val LightBarCenter = Offset((559f - ART_LEFT) / ART_WIDTH, (270f - ART_TOP) / ART_HEIGHT)
 
@@ -82,6 +79,9 @@ private const val ART_LEFT = 0f
 private const val ART_TOP = 128f
 private const val ART_WIDTH = 1117f
 private const val ART_HEIGHT = 764f
+
+/** The drawing's width over its height. */
+const val ControllerArtAspect = ART_WIDTH / ART_HEIGHT
 
 private fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
 

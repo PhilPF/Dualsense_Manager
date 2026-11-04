@@ -111,6 +111,13 @@ fun FindIcon(tint: Color, modifier: Modifier = Modifier.size(22.dp)) = Icon24(mo
     }
 }
 
+/** Power symbol: a ring open at the top, with a stroke through the gap. */
+@Composable
+fun PowerIcon(tint: Color, modifier: Modifier = Modifier.size(20.dp)) = Icon24(modifier) {
+    drawArc(tint, startAngle = -50f, sweepAngle = 280f, useCenter = false, topLeft = Offset(5f, 6f), size = Size(14f, 14f), style = lineStroke(2f))
+    drawLine(tint, Offset(12f, 3.5f), Offset(12f, 11.5f), strokeWidth = 2f, cap = StrokeCap.Round)
+}
+
 /** Battery outline filled to [fraction] (null: unknown, drawn empty). Drawn on a 26 x 13 grid. */
 @Composable
 fun BatteryGlyph(fraction: Float?, tint: Color, fill: Color, modifier: Modifier = Modifier.size(width = 22.dp, height = 11.dp)) {

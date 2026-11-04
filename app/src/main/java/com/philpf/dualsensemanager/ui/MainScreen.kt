@@ -377,7 +377,8 @@ private fun TopBar(
     }
 }
 
-private fun openBluetoothSettings(context: Context) {
+/** The system's Bluetooth settings (or all settings, when that page is missing). */
+internal fun openBluetoothSettings(context: Context) {
     try {
         context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
     } catch (e: ActivityNotFoundException) {

@@ -41,7 +41,8 @@ class MainActivity : ComponentActivity() {
 
         // Debug builds can show sample controllers, for screenshots: --ez demo true
         // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget]
-        // [--es press CROSS,L1] [--es sticks leftX,leftY,rightX,rightY], on the first sample.
+        // [--es press CROSS,L1] [--es sticks leftX,leftY,rightX,rightY], on the first sample,
+        // [--ez mono true] for the monospaced font.
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val demo = debuggable && intent.getBooleanExtra("demo", false)
         val source: ControllerSource = if (demo) DemoSource() else app.manager
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
             null
         }
         val initiallyOpen = if (demo) intent.getStringExtra("open") else null
+        val forcedMonospace = demo && intent.getBooleanExtra("mono", false)
         val input: ControllerInput = if (demo && (intent.hasExtra("press") || intent.hasExtra("sticks"))) {
             val parts = intent.getStringExtra("press").orEmpty().split(',')
                 .mapNotNull { name -> ControllerPart.entries.firstOrNull { it.name == name.trim() } }
@@ -79,7 +81,7 @@ class MainActivity : ComponentActivity() {
                 }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            DualsenseTheme(dark = dark, monospace = monospace) {
+            DualsenseTheme(dark = dark, monospace = monospace || forcedMonospace) {
                 if (demo && initiallyOpen == "widget") {
                     val views = ControllerViews.build(source.profiles.value.values, source.players.value, source.live.value)
                     RemoteViewsPreview(views.filter { it.isConnected })

@@ -36,6 +36,11 @@ shot sticks-dark --es theme dark --es open demo-1 --es press CROSS,R1 --es stick
 shot controller-light --es theme light --es open demo-2
 shot settings-light --es theme light --es open settings
 shot widget --es theme light --es open widget
+# Swipe down on the first widget: the next controller's card, its pill's thumb one dot down.
+adb shell input swipe 147 180 147 340 250
+sleep 2
+capture widget-swiped
+shot mono-dark --es theme dark --ez mono true
 
 # The colour wheel: the "+" next to white in Ana's controller sheet opens it in a popup.
 open_app --es theme dark --es open demo-1

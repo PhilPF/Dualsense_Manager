@@ -13,6 +13,8 @@
 
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <!-- Linking the app to a controller, to disconnect it (Android 17+). -->
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
 
     <application
         android:name=".DualsenseApp"

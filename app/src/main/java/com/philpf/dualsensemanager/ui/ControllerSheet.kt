@@ -1,5 +1,8 @@
 package com.philpf.dualsensemanager.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.ControllerPart
@@ -25,10 +29,12 @@ import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.RelativeTime
 import com.philpf.dualsensemanager.core.Sticks
 import com.philpf.dualsensemanager.device.ControllerSource
+import com.philpf.dualsensemanager.device.DisconnectResult
 import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.ControllerArt
 import com.philpf.dualsensemanager.ui.art.FindIcon
 import com.philpf.dualsensemanager.ui.art.PlusIcon
+import com.philpf.dualsensemanager.ui.art.PowerIcon
 import com.philpf.dualsensemanager.ui.glass.GlassButton
 import com.philpf.dualsensemanager.ui.glass.GlassChip
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
@@ -59,6 +65,9 @@ fun ColumnScope.ControllerSheetContent(
 ) {
     val glass = LocalGlass.current
     val live = view.live
+    val context = LocalContext.current
+    // The system's "let this app manage the controller" prompt; the answer comes back to source.disconnect.
+    val approval = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
 
     Box(Modifier.fillMaxWidth()) {
         ControllerArt(
@@ -82,12 +91,31 @@ fun ColumnScope.ControllerSheetContent(
     if (live != null) {
         LiveStatus(live, Modifier.align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(14.dp))
-        GlassButton(
-            text = "Find",
-            onClick = { source.identify(view.id) },
+        Row(
             modifier = Modifier.align(Alignment.CenterHorizontally),
-            icon = { FindIcon(glass.textPrimary, Modifier.size(20.dp)) },
-        )
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            GlassButton(
+                text = "Find",
+                onClick = { source.identify(view.id) },
+                icon = { FindIcon(glass.textPrimary, Modifier.size(20.dp)) },
+            )
+            if (source.canDisconnect(view.id)) {
+                // Disconnecting turns the controller off. The first time, Android asks to let the
+                // app manage this controller; if it cannot be done here, the Bluetooth settings can.
+                GlassButton(
+                    text = "Disconnect",
+                    onClick = {
+                        source.disconnect(
+                            view.id,
+                            askUser = { approval.launch(IntentSenderRequest.Builder(it).build()) },
+                            onResult = { if (it == DisconnectResult.FAILED) openBluetoothSettings(context) },
+                        )
+                    },
+                    icon = { PowerIcon(glass.textPrimary, Modifier.size(18.dp)) },
+                )
+            }
+        }
     } else {
         Text(
             text = RelativeTime.since(now, view.profile.lastSeen),

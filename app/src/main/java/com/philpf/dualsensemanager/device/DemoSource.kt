@@ -1,5 +1,6 @@
 package com.philpf.dualsensemanager.device
 
+import android.content.IntentSender
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerKind
@@ -99,6 +100,15 @@ class DemoSource : ControllerSource {
     }
 
     override fun identify(controllerId: String) = Unit
+
+    override fun canDisconnect(controllerId: String): Boolean =
+        _live.value.any { it.id == controllerId && it.transport == Transport.BLUETOOTH }
+
+    /** Pretends the controller went away. */
+    override fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
+        _live.update { list -> list.filterNot { it.id == controllerId } }
+        onResult(DisconnectResult.DONE)
+    }
 
     override fun forget(controllerId: String) {
         if (_live.value.none { it.id == controllerId }) _profiles.update { it - controllerId }

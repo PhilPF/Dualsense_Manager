@@ -1,6 +1,7 @@
 package com.philpf.dualsensemanager.device
 
 import android.content.Context
+import android.content.IntentSender
 import android.hardware.BatteryState
 import android.hardware.input.InputManager
 import android.hardware.lights.Light
@@ -25,6 +26,7 @@ import com.philpf.dualsensemanager.core.ControllerKind
 import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LedPalette
 import com.philpf.dualsensemanager.core.LiveController
+import com.philpf.dualsensemanager.core.Transport
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.PlayerLeds
 import com.philpf.dualsensemanager.core.Players
@@ -56,6 +58,7 @@ class ControllerManager(
 ) : ControllerSource {
 
     private val inputManager: InputManager = context.getSystemService(InputManager::class.java)
+    private val disconnector = ControllerDisconnect(context)
     private val usbManager: UsbManager? = context.getSystemService(UsbManager::class.java)
 
     private val thread = HandlerThread("controller-manager").apply { start() }
@@ -174,6 +177,15 @@ class ControllerManager(
     override fun deletePlayer(playerId: String) {
         store.deletePlayer(playerId)
         applyAll()
+    }
+
+    override fun canDisconnect(controllerId: String): Boolean =
+        disconnector.supported && _live.value.any { it.id == controllerId && it.transport == Transport.BLUETOOTH }
+
+    override fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
+        val controller = _live.value.firstOrNull { it.id == controllerId } ?: return onResult(DisconnectResult.FAILED)
+        val device = inputManager.getInputDevice(controller.deviceId) ?: return onResult(DisconnectResult.FAILED)
+        disconnector.disconnect(controllerId, device.vendorId, device.productId, askUser, onResult)
     }
 
     override fun identify(controllerId: String) {

@@ -28,24 +28,25 @@ lights and read its battery).
 - **Find.** Makes a controller rumble with both motors at full strength (the most Android
   allows) and blink its lights, for about 3.4 seconds.
 - **Which one is this?** While the app is open, pressing anything on a controller floods its
-  cell with its colour, in a wave from the controller outward. Its sheet shows the buttons
-  being pressed and the sticks where they are, moving as they move.
+  cell with its colour, in a wave from the controller outward; every press gets its own full
+  wave. Its sheet shows the buttons being pressed and the sticks where they are, moving as
+  they move.
+- **Disconnect** (Android 17 and later). Turns a controller off from its sheet. The first time
+  for each controller, Android asks you to let the app manage it. Turn it back on with its PS
+  button; it reconnects by itself.
 - **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
   notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
   charged. Both can be turned off in Settings.
-- **At a glance.** A home-screen widget with a square tile per connected controller, drawn
-  as in the app (the controller in lines over a glow of its colour), with its name and
-  battery below. The tiles are as large as
-  the widget allows while showing every controller (a 3 × 2 widget shows four to six,
-  depending on the home screen); beyond that the tiles scroll. Also a Quick Settings tile, and
-  the service's notification showing the controllers the same way.
-- **Live icon.** The app's icon is the controller in lines over coloured lights behind glass.
-  Settings can add a copy to the home screen that takes the colours of the connected
-  controllers (Android does not let an app change its own launcher icon, so this one is a
-  shortcut the app redraws).
+- **At a glance.** A one-cell home-screen widget: a stack with a card per connected controller,
+  drawn as in the app (the controller in lines over a glow of its colour) with its name and
+  battery. Swipe down to snap to the next one; a pill on the side has a dot per controller in
+  its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
+  notification showing the controllers the same way.
+- **App icon.** The controller in lines over coloured lights behind glass. With "Controllers'
+  colours" on in Settings, the icon takes the colours of the connected controllers.
 - **Remembered controllers.** Controllers that are not connected stay listed, dimmed, with
   when they were last seen; "Forget" frees their number and colour.
-- **Light and dark.** System, Light or Dark, in Settings.
+- **Light and dark, and a monospaced font**, in Settings.
 
 ## Design
 
@@ -87,14 +88,23 @@ redrawing.
 - **Sticks.** The joystick axes (X, Y for the left stick, Z, RZ for the right) with a round
   dead zone: a position v with |v| = m becomes 0 when m < 0.08, else
   v/m · min(1, (m − 0.08)/0.92), so it keeps its direction and its length is continuous.
-- **Widget layout** (`core/WidgetGrid.kt`). For n controllers in an area of W × H dp with gaps
-  of g = 4 dp, c columns give r(c) = ⌈n / c⌉ rows and squares of side
-  s(c) = min((W − (c − 1)g) / c, (H − (r(c) − 1)g) / r(c)). With s* = max s(c), if
-  s* ≥ 80 dp the widget shows every tile, taking among the c with
-  s(c) ≥ max(0.9 s*, 80 dp) the one with the fewest empty places c·r(c) − n, then the one with
-  more columns. Otherwise the tiles keep at least 80 dp and the grid scrolls. Android widgets
-  can only scroll vertically, so there is no sideways scrolling. The widget is rebuilt for each
-  size the launcher reports (portrait and landscape) and when it is resized.
+- **App icon.** Android has no way to draw a new launcher icon, only to switch between icons
+  an app ships. `tools/app_icons.py` generates one for every set of 1 to 4 of the 9 preset
+  colours (255 icons, each an `activity-alias` of MainActivity); `core/AppIconChoice` maps the
+  connected controllers' colours to their nearest presets and picks one, and `device/AppIcon`
+  enables it and disables the old one. That closes the app's window, so it waits until the
+  app is off screen. Some launchers take a moment to show the new icon, and some may drop a
+  home-screen icon whose alias was disabled; that is why it is a setting.
+- **Widget.** Android widgets can only scroll lists freely; the one view that snaps from item
+  to item is `StackView`, so the widget is a stack. A widget is not told which card is
+  showing, so each card carries the pill with its own dot marked.
+- **Disconnecting.** A DualSense on Bluetooth turns off when the phone drops the connection.
+  Android 17 (API 37) made `BluetoothDevice.disconnect()` public for apps that hold
+  `BLUETOOTH_CONNECT` and are associated with the device through the Companion Device Manager
+  (before, it needed `BLUETOOTH_PRIVILEGED`, which only system apps have). To find the paired
+  device of a controller, the app hashes each paired address as Android does for input
+  devices: the descriptor is the SHA-1 of ":054c:0ce6:uniqueId:" followed by the address, and
+  the driver reports the address as the unique id (`core/InputDescriptors`).
 - **Pressed buttons.** The activity receives the controllers' key and joystick events while
   it is in front and maps them to parts of the drawing; it keeps them, so a button such as
   Circle doesn't act as Back in the app.
@@ -103,13 +113,11 @@ redrawing.
 
 ## What apps cannot do
 
-- **Disconnect, connect or turn off a controller.** A DualSense on Bluetooth turns off when
-  the phone drops the connection, so turning it off and disconnecting it are the same thing.
-  Android keeps that to the system: the HID-host profile (`BluetoothHidHost`) and
-  `BluetoothDevice` connect/disconnect are not in the public SDK (checked for Android 14 and
-  16) and need the `BLUETOOTH_PRIVILEGED` permission, which only system apps (and the shell,
-  e.g. through Shizuku) have. Reconnecting always starts at the controller (its PS button):
-  once it is off, its radio is off too.
+- **Reconnect a controller.** Once a DualSense is off its radio is off too, so no phone (not
+  even a PS5) can reach it; it reconnects when you press its PS button.
+- **Disconnect before Android 17.** Older versions keep that to system apps.
+- **Recolour the widget's swipe outline.** `StackView` draws it in the system's blue, from
+  attributes apps cannot set.
 
 ## Building
 
@@ -124,19 +132,23 @@ minSdk 31).
   builds are signed with the committed `app/debug.keystore`, so each build installs over
   the previous one.
 - **Android Studio.** Open the project and run it, or `./gradlew assembleDebug`.
+- **App icons.** After changing the presets or the icon's design, run
+  `python3 tools/app_icons.py` to regenerate the icons and the manifest's aliases.
 
 Debug builds show sample controllers when started with
 `adb shell am start -n com.philpf.dualsensemanager/.MainActivity --ez demo true`
-(optionally `--es theme light|dark`, `--es open settings|demo-1|widget` and
-`--es press CROSS,L1`).
+(optionally `--es theme light|dark`, `--es open settings|demo-1|widget`,
+`--es press CROSS,L1`, `--es sticks 0.7,-0.5,0,0` and `--ez mono true`).
 
 ## Project layout
 
 - `core/` — plain Kotlin: models, palette and numbering, players, player-LED patterns,
-  battery rules and alerts, connection rule, storage format, colour maths. Unit-tested in
-  `app/src/test`.
+  battery rules and alerts, connection rule, storage format, colour maths, stick dead zone,
+  icon choice, input descriptors. Unit-tested in `app/src/test`.
 - `device/` — `ControllerManager` (finds controllers, holds their light sessions, reads
-  batteries, rumbles), `ProfileStore` (controllers and players), `SettingsStore`.
+  batteries, rumbles), `ControllerDisconnect`, `InputHighlights` (buttons and sticks),
+  `AppIcon`, `ProfileStore` (controllers and players), `SettingsStore`.
+- `tools/app_icons.py` — generates the launcher icons and their manifest aliases.
 - `service/` — the foreground service and notifications, the Bluetooth receiver, the
   Quick Settings tile. `widget/` — the home-screen widget.
 - `ui/` — Compose UI: `glass/` (backdrop blur and flat controls), `art/` (controller

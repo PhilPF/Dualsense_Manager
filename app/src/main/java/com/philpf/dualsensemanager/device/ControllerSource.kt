@@ -1,5 +1,6 @@
 package com.philpf.dualsensemanager.device
 
+import android.content.IntentSender
 import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.Player
@@ -37,6 +38,15 @@ interface ControllerSource {
 
     /** Rumbles the controller and blinks its lights, to tell which one it is. */
     fun identify(controllerId: String)
+
+    /** Whether the app can disconnect the controller (connected on Bluetooth, Android 17+). */
+    fun canDisconnect(controllerId: String): Boolean
+
+    /**
+     * Disconnects the controller, which turns it off. The first time for each controller, the
+     * system asks the user to let the app manage it: [askUser] gets that prompt to show.
+     */
+    fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit)
 
     /** Forgets a controller that is not connected. */
     fun forget(controllerId: String)

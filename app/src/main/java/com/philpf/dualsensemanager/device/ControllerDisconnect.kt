@@ -15,35 +15,40 @@ import com.philpf.dualsensemanager.Permissions
 import com.philpf.dualsensemanager.core.InputDescriptors
 
 /** How asking to disconnect a controller ended. */
-enum class DisconnectResult {
+sealed interface DisconnectResult {
     /** Android is disconnecting it (the controller then turns off). */
-    DONE,
+    data object Done : DisconnectResult
 
     /** The user did not let the app manage the controller. */
-    DECLINED,
+    data object Declined : DisconnectResult
 
-    /** Not possible here; the system's Bluetooth settings can still do it. */
-    FAILED,
+    /**
+     * The app cannot do it itself; the system settings can, in one tap: the controller's own
+     * page when its Bluetooth [address] is known, otherwise the list of Bluetooth devices.
+     */
+    data class InSettings(val address: String?) : DisconnectResult
 }
 
 /**
- * Disconnects a controller on Bluetooth, which turns it off. Since Android 17 (API 37) an app may
- * disconnect a device it is associated with through the Companion Device Manager; the user
- * approves that once per controller, in a system prompt. (Before, only system apps could.)
+ * Disconnects a controller on Bluetooth, which turns it off.
+ *
+ * From Android 17 (API 37) an app may disconnect a device it is associated with through the
+ * Companion Device Manager; the user approves that once per controller, in a system prompt.
+ * Before, only system apps may, so the app leads to the controller's page in the system
+ * settings instead, whose "Disconnect" button does it.
  */
 class ControllerDisconnect(private val context: Context) {
 
     private val companions: CompanionDeviceManager? = context.getSystemService(CompanionDeviceManager::class.java)
 
-    /** Whether this Android lets an approved app disconnect a device. */
-    val supported: Boolean get() = Build.VERSION.SDK_INT >= API_DISCONNECT && companions != null
+    /** Whether this Android lets an approved app disconnect a device itself. */
+    private val direct: Boolean get() = Build.VERSION.SDK_INT >= API_DISCONNECT && companions != null
 
     /**
      * Disconnects the controller with input [descriptor] (and [vendorId], [productId]). When the
      * app is not yet approved for it, [askUser] gets the system's prompt to show first.
      * [onResult] runs on the main thread.
      */
-    @SuppressLint("MissingPermission") // BLUETOOTH_CONNECT is checked first.
     fun disconnect(
         descriptor: String,
         vendorId: Int,
@@ -51,12 +56,9 @@ class ControllerDisconnect(private val context: Context) {
         askUser: (IntentSender) -> Unit,
         onResult: (DisconnectResult) -> Unit,
     ) {
+        val device = pairedDevice(descriptor, vendorId, productId) ?: return onResult(DisconnectResult.InSettings(null))
         val companions = companions
-        if (!supported || companions == null || !Permissions.hasBluetoothConnect(context)) return onResult(DisconnectResult.FAILED)
-        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return onResult(DisconnectResult.FAILED)
-        // The paired device whose address hashes to the controller's descriptor.
-        val device = adapter.bondedDevices.firstOrNull { InputDescriptors.matches(vendorId, productId, it.address, descriptor) }
-            ?: return onResult(DisconnectResult.FAILED)
+        if (!direct || companions == null) return onResult(DisconnectResult.InSettings(device.address))
         val approved = companions.myAssociations.any { it.deviceMacAddress?.toString().equals(device.address, ignoreCase = true) }
         if (approved) return onResult(disconnectNow(device))
 
@@ -73,9 +75,21 @@ class ControllerDisconnect(private val context: Context) {
 
                 override fun onAssociationCreated(associationInfo: AssociationInfo) = onResult(disconnectNow(device))
 
-                override fun onFailure(error: CharSequence?) = onResult(DisconnectResult.DECLINED)
+                override fun onFailure(error: CharSequence?) = onResult(DisconnectResult.Declined)
             },
         )
+    }
+
+    /** The paired device whose address hashes to the controller's [descriptor]. */
+    @SuppressLint("MissingPermission") // BLUETOOTH_CONNECT is checked first.
+    private fun pairedDevice(descriptor: String, vendorId: Int, productId: Int): BluetoothDevice? {
+        if (!Permissions.hasBluetoothConnect(context)) return null
+        val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return null
+        return try {
+            adapter.bondedDevices?.firstOrNull { InputDescriptors.matches(vendorId, productId, it.address, descriptor) }
+        } catch (e: SecurityException) {
+            null
+        }
     }
 
     /**
@@ -86,11 +100,11 @@ class ControllerDisconnect(private val context: Context) {
     @SuppressLint("MissingPermission")
     private fun disconnectNow(device: BluetoothDevice): DisconnectResult = try {
         val status = BluetoothDevice::class.java.getMethod("disconnect").invoke(device)
-        if (status == BluetoothStatusCodes.SUCCESS) DisconnectResult.DONE else DisconnectResult.FAILED
+        if (status == BluetoothStatusCodes.SUCCESS) DisconnectResult.Done else DisconnectResult.InSettings(device.address)
     } catch (e: ReflectiveOperationException) {
-        DisconnectResult.FAILED
+        DisconnectResult.InSettings(device.address)
     } catch (e: SecurityException) {
-        DisconnectResult.FAILED
+        DisconnectResult.InSettings(device.address)
     }
 
     private companion object {

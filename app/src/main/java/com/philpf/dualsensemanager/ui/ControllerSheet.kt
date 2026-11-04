@@ -101,15 +101,16 @@ fun ColumnScope.ControllerSheetContent(
                 icon = { FindIcon(glass.textPrimary, Modifier.size(20.dp)) },
             )
             if (source.canDisconnect(view.id)) {
-                // Disconnecting turns the controller off. The first time, Android asks to let the
-                // app manage this controller; if it cannot be done here, the Bluetooth settings can.
+                // Disconnecting turns the controller off. From Android 17 the app does it (the first
+                // time, Android asks to let it manage this controller); before, the controller's page
+                // in the system settings opens, where "Disconnect" is one tap.
                 GlassButton(
                     text = "Disconnect",
                     onClick = {
                         source.disconnect(
                             view.id,
                             askUser = { approval.launch(IntentSenderRequest.Builder(it).build()) },
-                            onResult = { if (it == DisconnectResult.FAILED) openBluetoothSettings(context) },
+                            onResult = { if (it is DisconnectResult.InSettings) openControllerSettings(context, it.address) },
                         )
                     },
                     icon = { PowerIcon(glass.textPrimary, Modifier.size(18.dp)) },

@@ -39,12 +39,13 @@ interface ControllerSource {
     /** Rumbles the controller and blinks its lights, to tell which one it is. */
     fun identify(controllerId: String)
 
-    /** Whether the app can disconnect the controller (connected on Bluetooth, Android 17+). */
+    /** Whether the controller can be disconnected: it is connected on Bluetooth. */
     fun canDisconnect(controllerId: String): Boolean
 
     /**
-     * Disconnects the controller, which turns it off. The first time for each controller, the
-     * system asks the user to let the app manage it: [askUser] gets that prompt to show.
+     * Disconnects the controller, which turns it off. From Android 17 the app does it; the first
+     * time for each controller, the system asks the user to let the app manage it: [askUser]
+     * gets that prompt to show. Before, [onResult] gets where in the system settings to do it.
      */
     fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit)
 

@@ -107,7 +107,7 @@ class DemoSource : ControllerSource {
     /** Pretends the controller went away. */
     override fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
         _live.update { list -> list.filterNot { it.id == controllerId } }
-        onResult(DisconnectResult.DONE)
+        onResult(DisconnectResult.Done)
     }
 
     override fun forget(controllerId: String) {

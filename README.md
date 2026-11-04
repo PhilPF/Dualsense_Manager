@@ -31,16 +31,18 @@ lights and read its battery).
   cell with its colour, in a wave from the controller outward; every press gets its own full
   wave. Its sheet shows the buttons being pressed and the sticks where they are, moving as
   they move.
-- **Disconnect** (Android 17 and later). Turns a controller off from its sheet. The first time
-  for each controller, Android asks you to let the app manage it. Turn it back on with its PS
-  button; it reconnects by itself.
+- **Disconnect.** Turns a controller on Bluetooth off, from its sheet. From Android 17 the app
+  does it; the first time for each controller, Android asks you to let the app manage it. On
+  Android 12 to 16 the button opens the controller's own page in the system's Bluetooth
+  settings, where "Disconnect" is one tap (the list of Bluetooth devices instead, on phones
+  whose settings lack that page). Turn it back on with its PS button; it reconnects by itself.
 - **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
   notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
   charged. Both can be turned off in Settings.
-- **At a glance.** A one-cell home-screen widget: a stack with a card per connected controller,
-  drawn as in the app (the controller in lines over a glow of its colour) with its name and
-  battery. Swipe down to snap to the next one; a pill on its left has a dot per controller in
-  its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
+- **At a glance.** A one-cell home-screen widget: a card per connected controller, filling
+  the widget, drawn as in the app (the controller in lines over a glow of its colour) with its
+  name, battery and connection. Swipe down to snap to the next one; a pill on its right has a
+  dot per controller in its colour and a thumb on the one shown. Also a Quick Settings tile, and the service's
   notification showing the controllers the same way.
 - **App icon.** The controller in lines over coloured lights behind glass. With "Controllers'
   colours" on in Settings, the icon takes the colours of the connected controllers.
@@ -96,15 +98,26 @@ redrawing.
   app is off screen. Some launchers take a moment to show the new icon, and some may drop a
   home-screen icon whose alias was disabled; that is why it is a setting.
 - **Widget.** Android widgets can only scroll lists freely; the one view that snaps from item
-  to item is `StackView`, so the widget is a stack. A widget is not told which card is
-  showing, so each card carries the pill with its own dot marked.
+  to item is `StackView`, so the widget is a stack. A stack draws its front card at 90 % of
+  its size, inset by a frame and lowered by a tenth of its height, with the cards behind it
+  peeking above. So the widget's stack is larger than the widget and shifted up and left, by
+  amounts computed for each widget size (`core/StackGeometry`, with tests), that its front
+  card covers the widget exactly; the widget's rounded outline cuts off the rest. A widget is
+  not told which card is showing, so each card carries the pill with its own dot marked; only
+  the front card is ever seen, so the pill stays in place while its thumb moves. The stack's
+  outline colours (blue by default) come from a theme style, and the widget's stack gets one
+  without them.
 - **Disconnecting.** A DualSense on Bluetooth turns off when the phone drops the connection.
   Android 17 (API 37) made `BluetoothDevice.disconnect()` public for apps that hold
   `BLUETOOTH_CONNECT` and are associated with the device through the Companion Device Manager
-  (before, it needed `BLUETOOTH_PRIVILEGED`, which only system apps have). To find the paired
-  device of a controller, the app hashes each paired address as Android does for input
-  devices: the descriptor is the SHA-1 of ":054c:0ce6:uniqueId:" followed by the address, and
-  the driver reports the address as the unique id (`core/InputDescriptors`).
+  (before, it needed `BLUETOOTH_PRIVILEGED`, which only system apps have). On Android 12 to 16
+  the app opens Android's own page for the device: AOSP's Settings exports it to apps holding
+  `BLUETOOTH_CONNECT` (action `com.android.settings.BLUETOOTH_DEVICE_DETAIL_SETTINGS`, the
+  address in the `:settings:show_fragment_args` bundle as `device_address`), and its second
+  button disconnects. To find the paired device of a controller, the app hashes each paired
+  address as Android does for input devices: the descriptor is the SHA-1 of
+  ":054c:0ce6:uniqueId:" followed by the address, and the driver reports the address as the
+  unique id (`core/InputDescriptors`).
 - **Pressed buttons.** The activity receives the controllers' key and joystick events while
   it is in front and maps them to parts of the drawing; it keeps them, so a button such as
   Circle doesn't act as Back in the app.
@@ -115,9 +128,8 @@ redrawing.
 
 - **Reconnect a controller.** Once a DualSense is off its radio is off too, so no phone (not
   even a PS5) can reach it; it reconnects when you press its PS button.
-- **Disconnect before Android 17.** Older versions keep that to system apps.
-- **Recolour the widget's swipe outline.** `StackView` draws it in the system's blue, from
-  attributes apps cannot set.
+- **Disconnect by themselves before Android 17.** Older versions keep that to system apps;
+  the app leads to the system's page for the controller instead.
 
 ## Building
 

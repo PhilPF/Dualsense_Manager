@@ -180,11 +180,11 @@ class ControllerManager(
     }
 
     override fun canDisconnect(controllerId: String): Boolean =
-        disconnector.supported && _live.value.any { it.id == controllerId && it.transport == Transport.BLUETOOTH }
+        _live.value.any { it.id == controllerId && it.transport == Transport.BLUETOOTH }
 
     override fun disconnect(controllerId: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
-        val controller = _live.value.firstOrNull { it.id == controllerId } ?: return onResult(DisconnectResult.FAILED)
-        val device = inputManager.getInputDevice(controller.deviceId) ?: return onResult(DisconnectResult.FAILED)
+        val controller = _live.value.firstOrNull { it.id == controllerId } ?: return onResult(DisconnectResult.InSettings(null))
+        val device = inputManager.getInputDevice(controller.deviceId) ?: return onResult(DisconnectResult.InSettings(null))
         disconnector.disconnect(controllerId, device.vendorId, device.productId, askUser, onResult)
     }
 

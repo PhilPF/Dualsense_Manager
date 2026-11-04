@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -378,6 +379,35 @@ private fun TopBar(
 }
 
 /** The system's Bluetooth settings (or all settings, when that page is missing). */
+/**
+ * The controller's own page in the system's Bluetooth settings (Android's Settings app), whose
+ * "Disconnect" button turns it off. The list of Bluetooth devices instead when its [address] is
+ * unknown or the page is missing (some makers' settings apps do not have it).
+ */
+internal fun openControllerSettings(context: Context, address: String?) {
+    val page = address?.let {
+        Intent(ACTION_DEVICE_PAGE)
+            .setPackage(SETTINGS_PACKAGE)
+            .putExtra(EXTRA_PAGE_ARGUMENTS, Bundle().apply { putString(KEY_DEVICE_ADDRESS, it) })
+    }
+    val opened = page != null && try {
+        context.startActivity(page)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    } catch (e: SecurityException) {
+        false
+    }
+    if (!opened) openBluetoothSettings(context)
+}
+
+// The device page of AOSP's Settings (Settings$BluetoothDeviceDetailActivity, exported to apps
+// holding BLUETOOTH_CONNECT since Android 12) and how it is told which device to show.
+private const val SETTINGS_PACKAGE = "com.android.settings"
+private const val ACTION_DEVICE_PAGE = "com.android.settings.BLUETOOTH_DEVICE_DETAIL_SETTINGS"
+private const val EXTRA_PAGE_ARGUMENTS = ":settings:show_fragment_args"
+private const val KEY_DEVICE_ADDRESS = "device_address"
+
 internal fun openBluetoothSettings(context: Context) {
     try {
         context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))

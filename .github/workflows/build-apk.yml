@@ -89,7 +89,8 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          disable-animations: true
+          # Animations stay on so screenshots can catch the press wave mid-flood.
+          disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash .github/screenshots.sh
 

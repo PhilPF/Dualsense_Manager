@@ -24,35 +24,26 @@ object BatteryRules {
     }
 }
 
-/** A half-open percentage interval [low, high). */
-data class PercentRange(val low: Int, val high: Int)
-
 object BatteryText {
     /**
-     * The DualSense reports its charge as a level d in {0, ..., 10}, and the kernel publishes
-     * p = min(10d + 5, 100) %. So a reported p with p = 5 (mod 10) and 5 <= p <= 95 only says
-     * that the charge lies in [p - 5, p + 5). Returns that interval, or null when [percent] is
-     * not of this form (then it is taken at face value).
+     * The percentage to show for a reported one. The DualSense reports its charge as a level
+     * d in {0, ..., 10}, published by the kernel as p = min(10d + 5, 100) %, which only says that
+     * the charge lies in [10d, 10d + 10). Its lower end 10d = p - 5 is shown: a value the
+     * charge is guaranteed to reach. Values not of that form are shown as they are.
      */
-    fun range(percent: Int): PercentRange? =
-        if (percent in 5..95 && percent % 10 == 5) PercentRange(percent - 5, percent + 5) else null
+    fun shown(percent: Int): Int = if (percent in 5..95 && percent % 10 == 5) percent - 5 else percent
 
-    /** "50–60%" for a 10 %-step reading, "100%" otherwise. */
-    fun level(percent: Int): String = range(percent)?.let { "${it.low}–${it.high}%" } ?: "$percent%"
+    /** "50%" for a reported 55 %. */
+    fun level(percent: Int): String = "${shown(percent)}%"
 
     fun level(reading: BatteryReading?): String {
         val percent = reading?.percent ?: return "—"
         return level(percent)
     }
 
-    fun status(status: ChargeStatus): String = when (status) {
-        ChargeStatus.CHARGING -> "Charging"
-        ChargeStatus.DISCHARGING -> "On battery"
-        ChargeStatus.FULL -> "Fully charged"
-        ChargeStatus.NOT_CHARGING -> "Not charging"
-        ChargeStatus.UNKNOWN -> "Status unknown"
-    }
+    /** Battery-icon fill, 0..1. */
+    fun fraction(percent: Int): Float = shown(percent) / 100f
 
-    /** At most 15 % reported, i.e. at most the 10–20 % step. */
+    /** At most 15 % reported, i.e. the 10 % step or lower. */
     fun isLow(percent: Int): Boolean = percent <= 15
 }

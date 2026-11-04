@@ -35,6 +35,48 @@ class PlayersLedsAlertsTest {
     }
 
     @Test
+    fun swappingTwoControllersSwapsNumbersAndAutomaticColours() {
+        val blue = LedPalette.colors[0].rgb
+        val red = LedPalette.colors[1].rgb
+        val a = ControllerProfile("a", 1, ControllerKind.DUALSENSE, blue)
+        val b = ControllerProfile("b", 2, ControllerKind.DUALSENSE, red)
+        val out = Numbering.reorder(mapOf("a" to a, "b" to b), listOf("b", "a"), emptyList())
+        assertEquals(1, out.getValue("b").number)
+        assertEquals(2, out.getValue("a").number)
+        assertEquals(blue, out.getValue("b").color)
+        assertEquals(red, out.getValue("a").color)
+    }
+
+    @Test
+    fun pickedColoursStayWithTheirControllerWhenReordering() {
+        val purple = LedPalette.colors[6].rgb
+        val a = ControllerProfile("a", 1, ControllerKind.DUALSENSE, purple, customColor = true)
+        val b = ControllerProfile("b", 3, ControllerKind.DUALSENSE, LedPalette.colors[2].rgb)
+        val c = ControllerProfile("c", 2, ControllerKind.DUALSENSE, LedPalette.colors[1].rgb)
+        // Only a and b are reordered: they share the numbers {1, 3}; c keeps 2.
+        val out = Numbering.reorder(mapOf("a" to a, "b" to b, "c" to c), listOf("b", "a"), emptyList())
+        assertEquals(1, out.getValue("b").number)
+        assertEquals(3, out.getValue("a").number)
+        assertEquals(2, out.getValue("c").number)
+        assertEquals(purple, out.getValue("a").color)
+        assertEquals(LedPalette.colors[0].rgb, out.getValue("b").color)
+    }
+
+    @Test
+    fun automaticColoursAvoidPlayersColours() {
+        val a = ControllerProfile("a", 2, ControllerKind.DUALSENSE, LedPalette.colors[1].rgb)
+        val out = Numbering.reorder(mapOf("a" to a), listOf("a"), listOf(LedPalette.colors[1].rgb))
+        assertEquals(LedPalette.colors[0].rgb, out.getValue("a").color)
+    }
+
+    @Test
+    fun movingItemsInAList() {
+        assertEquals(listOf("b", "c", "a"), Numbering.moved(listOf("a", "b", "c"), 0, 2))
+        assertEquals(listOf("c", "a", "b"), Numbering.moved(listOf("a", "b", "c"), 2, 0))
+        assertEquals(listOf("a", "b"), Numbering.moved(listOf("a", "b"), 0, 5))
+    }
+
+    @Test
     fun playerLedPatternsMatchThePs5() {
         assertEquals(setOf(3), PlayerLeds.pattern(1))
         assertEquals(setOf(2, 4), PlayerLeds.pattern(2))

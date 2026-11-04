@@ -6,7 +6,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -257,6 +259,7 @@ fun Swatch(
 }
 
 /** A selectable capsule with an optional colour dot, e.g. a player. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GlassChip(
     text: String,
@@ -264,6 +267,7 @@ fun GlassChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     dot: Color? = null,
+    onLongClick: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val glass = LocalGlass.current
@@ -274,7 +278,7 @@ fun GlassChip(
             .clip(CircleShape)
             .background(fill)
             .then(if (selected) Modifier.border(1.dp, glass.textPrimary.copy(alpha = 0.18f), CircleShape) else Modifier)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics {
                 this.selected = selected
                 role = Role.RadioButton

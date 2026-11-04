@@ -9,22 +9,21 @@ import org.junit.Test
 class BatteryTest {
 
     @Test
-    fun everyKernelLevelMapsToItsTenPercentStep() {
-        // hid-playstation: p = min(10d + 5, 100) for d in 0..10.
+    fun everyKernelLevelShowsTheLowerEndOfItsStep() {
+        // hid-playstation: p = min(10d + 5, 100) for d in 0..10; the charge is in [10d, 10d + 10).
         for (d in 0..9) {
             val p = 10 * d + 5
-            assertEquals(PercentRange(10 * d, 10 * d + 10), BatteryText.range(p))
-            assertEquals("${10 * d}–${10 * d + 10}%", BatteryText.level(p))
+            assertEquals(10 * d, BatteryText.shown(p))
+            assertEquals("${10 * d}%", BatteryText.level(p))
+            assertEquals(d / 10f, BatteryText.fraction(p), 1e-6f)
         }
-        assertNull(BatteryText.range(100))
         assertEquals("100%", BatteryText.level(100))
     }
 
     @Test
     fun valuesNotOnTheStepGridAreShownAsIs() {
-        assertNull(BatteryText.range(50))
-        assertNull(BatteryText.range(0))
-        assertNull(BatteryText.range(105))
+        assertEquals(50, BatteryText.shown(50))
+        assertEquals(0, BatteryText.shown(0))
         assertEquals("42%", BatteryText.level(42))
     }
 
@@ -49,7 +48,7 @@ class BatteryTest {
     }
 
     @Test
-    fun lowMeansAtMostTheTenToTwentyStep() {
+    fun lowMeansTheTenPercentStepOrLower() {
         assertTrue(BatteryText.isLow(5))
         assertTrue(BatteryText.isLow(15))
         assertFalse(BatteryText.isLow(25))

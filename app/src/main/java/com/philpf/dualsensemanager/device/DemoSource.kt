@@ -6,6 +6,7 @@ import com.philpf.dualsensemanager.core.ControllerKind
 import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LedPalette
 import com.philpf.dualsensemanager.core.LiveController
+import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.Players
 import com.philpf.dualsensemanager.core.Transport
@@ -38,7 +39,7 @@ class DemoSource : ControllerSource {
 
     private val _live = MutableStateFlow(
         listOf(
-            LiveController("demo-1", 1, ControllerKind.DUALSENSE, Transport.BLUETOOTH, BatteryReading(55, ChargeStatus.DISCHARGING), true),
+            LiveController("demo-1", FIRST_DEVICE_ID, ControllerKind.DUALSENSE, Transport.BLUETOOTH, BatteryReading(55, ChargeStatus.DISCHARGING), true),
             LiveController("demo-2", 2, ControllerKind.DUALSENSE, Transport.USB, BatteryReading(25, ChargeStatus.CHARGING), true),
         ),
     )
@@ -49,6 +50,10 @@ class DemoSource : ControllerSource {
 
     override fun preview(controllerId: String, rgb: Int) {
         _previews.update { it + (controllerId to (rgb and 0xFFFFFF)) }
+    }
+
+    override fun endPreview(controllerId: String) {
+        _previews.update { it - controllerId }
     }
 
     override fun setColor(controllerId: String, rgb: Int) {
@@ -70,17 +75,22 @@ class DemoSource : ControllerSource {
         _profiles.update { Players.assign(it, controllerId, playerId) }
     }
 
-    override fun newPlayer(controllerId: String): String? {
-        val profile = _profiles.value[controllerId] ?: return null
-        val color = profile.playerId?.let { _players.value[it]?.color } ?: profile.color
-        val player = Player("demo-${_players.value.size + 1}-${System.nanoTime()}", Players.defaultName(_players.value.values.map { it.name }), color)
+    override fun newPlayer(controllerId: String, name: String, color: Int): String? {
+        if (controllerId !in _profiles.value) return null
+        val player = Player("demo-${System.nanoTime()}", name.ifBlank { Players.defaultName(_players.value.values.map { it.name }) }, color and 0xFFFFFF)
         _players.update { it + (player.id to player) }
         assignPlayer(controllerId, player.id)
+        _previews.update { it - controllerId }
         return player.id
     }
 
-    override fun renamePlayer(playerId: String, name: String) {
-        _players.update { players -> players[playerId]?.let { players + (playerId to it.copy(name = name)) } ?: players }
+    override fun updatePlayer(playerId: String, name: String, color: Int) {
+        _players.update { players -> players[playerId]?.let { players + (playerId to it.copy(name = name, color = color and 0xFFFFFF)) } ?: players }
+        _previews.value = emptyMap()
+    }
+
+    override fun reorder(order: List<String>) {
+        _profiles.update { Numbering.reorder(it, order, _players.value.values.map { p -> p.color }) }
     }
 
     override fun deletePlayer(playerId: String) {
@@ -98,7 +108,9 @@ class DemoSource : ControllerSource {
         _profiles.update { profiles -> profiles[id]?.let { profiles + (id to transform(it)) } ?: profiles }
     }
 
-    private companion object {
-        const val DAY_MS = 86_400_000L
+    companion object {
+        /** Input-device id of the first sample controller. */
+        const val FIRST_DEVICE_ID = 1
+        private const val DAY_MS = 86_400_000L
     }
 }

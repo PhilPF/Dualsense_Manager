@@ -17,6 +17,9 @@ interface ControllerSource {
     /** Shows [rgb] on the controller without saving it, while a slider is dragged. */
     fun preview(controllerId: String, rgb: Int)
 
+    /** Drops a preview, going back to the saved colour. */
+    fun endPreview(controllerId: String)
+
     /** Saves [rgb] as the colour of the controller's player, or of the controller when it has none. */
     fun setColor(controllerId: String, rgb: Int)
 
@@ -25,10 +28,10 @@ interface ControllerSource {
 
     fun assignPlayer(controllerId: String, playerId: String?)
 
-    /** Creates a player with a default name and the controller's colour, gives it the controller, returns its id. */
-    fun newPlayer(controllerId: String): String?
+    /** Creates a player and gives it the controller; returns the player's id. */
+    fun newPlayer(controllerId: String, name: String, color: Int): String?
 
-    fun renamePlayer(playerId: String, name: String)
+    fun updatePlayer(playerId: String, name: String, color: Int)
 
     fun deletePlayer(playerId: String)
 
@@ -37,4 +40,7 @@ interface ControllerSource {
 
     /** Forgets a controller that is not connected. */
     fun forget(controllerId: String)
+
+    /** Puts controllers in this order, renumbering them (swapping two swaps their numbers). */
+    fun reorder(order: List<String>)
 }

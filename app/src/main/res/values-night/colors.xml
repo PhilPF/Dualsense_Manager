@@ -6,4 +6,5 @@
     <color name="widget_text">#F5FFFFFF</color>
     <color name="widget_text_secondary">#A6FFFFFF</color>
     <color name="widget_charging">#FF7CF0A0</color>
+    <color name="widget_tile">#14FFFFFF</color>
 </resources>

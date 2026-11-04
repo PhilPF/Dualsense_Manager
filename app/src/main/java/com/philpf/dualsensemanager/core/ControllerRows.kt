@@ -48,6 +48,42 @@ object Players {
         profiles.mapValues { (_, p) -> if (p.playerId == playerId) p.copy(playerId = null) else p }
 }
 
+object Numbering {
+    /**
+     * Puts the controllers in [order] in that order: they keep the set of numbers they hold
+     * between them, handed out in ascending order along [order]. Swapping two controllers swaps
+     * their numbers. Automatic colours follow the numbers (so DualSense 1 stays blue); colours
+     * the user picked stay with their controller. [playerColors] are avoided like any colour in use.
+     */
+    fun reorder(
+        profiles: Map<String, ControllerProfile>,
+        order: List<String>,
+        playerColors: Collection<Int>,
+    ): Map<String, ControllerProfile> {
+        val ids = order.distinct().filter { it in profiles }
+        val numbers = ids.map { profiles.getValue(it).number }.sorted()
+        val next = profiles.toMutableMap()
+        ids.forEachIndexed { i, id -> next[id] = next.getValue(id).copy(number = numbers[i]) }
+        val recolour = ids.map { next.getValue(it) }.filter { !it.customColor }.sortedBy { it.number }
+        val recolourIds = recolour.mapTo(HashSet()) { it.id }
+        val taken = (next.values.filter { it.id !in recolourIds }.map { it.color } + playerColors).toMutableList()
+        for (p in recolour) {
+            val color = LedPalette.automaticColor(p.number, taken)
+            taken += color
+            next[p.id] = p.copy(color = color)
+        }
+        return next
+    }
+
+    /** [list] with the item at [from] moved to [to]. */
+    fun <T> moved(list: List<T>, from: Int, to: Int): List<T> {
+        if (from !in list.indices || to !in list.indices || from == to) return list
+        val result = list.toMutableList()
+        result.add(to, result.removeAt(from))
+        return result
+    }
+}
+
 object PlayerLeds {
     private val NAME = Regex("player-?(\\d+)$", RegexOption.IGNORE_CASE)
 

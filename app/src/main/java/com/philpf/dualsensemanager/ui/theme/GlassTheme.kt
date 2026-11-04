@@ -44,6 +44,8 @@ data class GlassPalette(
     val charging: Color,
     /** How strongly controllers' light colours glow behind the glass. */
     val glowAlpha: Float,
+    /** Fill over the blur of sheets, so the colours behind don't drown the one being edited. */
+    val frost: Color,
     val scrim: Color,
 )
 
@@ -67,6 +69,7 @@ val DarkGlass = GlassPalette(
     danger = Color(0xFFFF7A7A),
     charging = Color(0xFF7CF0A0),
     glowAlpha = 0.62f,
+    frost = Color(0x8C0B0E1A),
     scrim = Color(0x73000000),
 )
 
@@ -90,6 +93,7 @@ val LightGlass = GlassPalette(
     danger = Color(0xFFD93A3A),
     charging = Color(0xFF1F9D55),
     glowAlpha = 0.5f,
+    frost = Color(0x99F7F8FC),
     scrim = Color(0x2E000000),
 )
 

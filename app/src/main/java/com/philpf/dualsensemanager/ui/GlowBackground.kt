@@ -15,8 +15,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.ui.theme.GlassPalette
 
-/** Where a controller's light glows from, in root coordinates. */
-data class GlowSpot(val center: Offset, val color: Color)
+/**
+ * Where a controller's light glows from, in root coordinates, and how strongly (1 = normal;
+ * less while another controller is selected, more while its buttons are being pressed).
+ */
+data class GlowSpot(val center: Offset, val color: Color, val strength: Float = 1f)
 
 /**
  * The scene behind the glass: a plain gradient with, behind each connected controller's cell,
@@ -37,7 +40,8 @@ fun GlowBackground(spots: () -> List<GlowSpot>, glass: GlassPalette, modifier: M
         )
         val radius = 240.dp.toPx()
         for (spot in spots()) {
-            val a = glass.glowAlpha
+            if (spot.strength <= 0.01f) continue
+            val a = (glass.glowAlpha * spot.strength).coerceAtMost(0.95f)
             drawCircle(
                 brush = Brush.radialGradient(
                     0f to spot.color.copy(alpha = a),

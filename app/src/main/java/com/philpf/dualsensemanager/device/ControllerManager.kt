@@ -121,6 +121,11 @@ class ControllerManager(
         scheduleApply(controllerId)
     }
 
+    override fun endPreview(controllerId: String) {
+        _previews.update { it - controllerId }
+        scheduleApply(controllerId)
+    }
+
     override fun setColor(controllerId: String, rgb: Int) {
         val profile = store.get(controllerId) ?: return
         val playerId = profile.playerId
@@ -145,17 +150,25 @@ class ControllerManager(
         applyAll()
     }
 
-    override fun newPlayer(controllerId: String): String? {
-        val profile = store.get(controllerId) ?: return null
-        val name = Players.defaultName(store.players.value.values.map { it.name })
-        val player = store.createPlayer(name, store.colorOf(profile))
+    override fun newPlayer(controllerId: String, name: String, color: Int): String? {
+        if (store.get(controllerId) == null) return null
+        val player = store.createPlayer(name.ifBlank { Players.defaultName(store.players.value.values.map { it.name }) }, color)
         store.assignPlayer(controllerId, player.id)
+        _previews.update { it - controllerId }
         applyAll()
         return player.id
     }
 
-    override fun renamePlayer(playerId: String, name: String) {
-        store.updatePlayer(playerId) { it.copy(name = name) }
+    override fun updatePlayer(playerId: String, name: String, color: Int) {
+        store.updatePlayer(playerId) { it.copy(name = name, color = color and 0xFFFFFF) }
+        val controllers = store.profiles.value.values.filter { it.playerId == playerId }.map { it.id }.toSet()
+        _previews.update { it - controllers }
+        applyAll()
+    }
+
+    override fun reorder(order: List<String>) {
+        store.reorder(order)
+        applyAll()
     }
 
     override fun deletePlayer(playerId: String) {
@@ -393,12 +406,13 @@ class ControllerManager(
         const val POLL_BACKGROUND_MS = 60_000L
         const val APPLY_COALESCE_MS = 16L
         const val SIGHTING_INTERVAL_MS = 5 * 60_000L
-        const val BLINK_STEP_MS = 180L
+        const val BLINK_STEP_MS = 230L
         val FOLLOW_UP_DELAYS_MS = longArrayOf(700L, 2_000L, 5_000L)
 
-        /** Lights on, off, on, off, on, off, then back to normal (null). */
-        val BLINK_STEPS = listOf(true, false, true, false, true, false, null)
-        val RUMBLE_TIMINGS = longArrayOf(0L, 200L, 140L, 200L, 140L, 200L)
+        /** Lights on, off, ..., then back to normal (null): about two seconds, like the rumble. */
+        val BLINK_STEPS = listOf(true, false, true, false, true, false, true, false, null)
+        // Long pulses: the motors need a moment to spin up, so short ones feel weak.
+        val RUMBLE_TIMINGS = longArrayOf(0L, 450L, 150L, 450L, 150L, 700L)
         val RUMBLE_AMPLITUDES = intArrayOf(0, 255, 0, 255, 0, 255)
     }
 }

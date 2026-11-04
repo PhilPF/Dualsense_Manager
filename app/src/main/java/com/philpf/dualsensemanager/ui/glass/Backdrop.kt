@@ -70,6 +70,8 @@ fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
     tint: Brush? = null,
+    /** A flat fill over the blur that lets less of the background through (used by sheets). */
+    frost: Color = Color.Transparent,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -93,6 +95,7 @@ fun GlassSurface(
                     translate(offset.x, offset.y) { drawLayer(backdrop.layer) }
                 }
                 drawLayer(blurLayer)
+                if (frost.alpha > 0f) drawRect(frost)
                 val stop = (sheenStopPx / size.height).coerceIn(0.01f, 0.99f)
                 drawRect(Brush.verticalGradient(0f to glass.sheenTop, stop to glass.sheenMiddle, 1f to glass.sheenBottom))
                 if (tint != null) drawRect(tint)

@@ -1,12 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:orientation="vertical"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="10dp">
+    android:padding="8dp">
+
+    <GridView
+        android:id="@+id/widget_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:columnWidth="108dp"
+        android:gravity="center"
+        android:horizontalSpacing="4dp"
+        android:numColumns="auto_fit"
+        android:stretchMode="columnWidth"
+        android:verticalSpacing="4dp" />
 
     <TextView
         android:id="@+id/widget_empty"
@@ -16,185 +25,4 @@
         android:text="@string/no_controllers"
         android:textColor="@color/widget_text_secondary"
         android:textSize="14sp" />
-
-    <LinearLayout
-        android:id="@+id/row1"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:id="@+id/dot1"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/widget_dot" />
-
-        <TextView
-            android:id="@+id/name1"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/widget_text"
-            android:textSize="14sp" />
-
-        <ImageView
-            android:id="@+id/bolt1"
-            android:layout_width="13dp"
-            android:layout_height="13dp"
-            android:layout_marginEnd="4dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_bolt"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/level1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/row2"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:id="@+id/dot2"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/widget_dot" />
-
-        <TextView
-            android:id="@+id/name2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/widget_text"
-            android:textSize="14sp" />
-
-        <ImageView
-            android:id="@+id/bolt2"
-            android:layout_width="13dp"
-            android:layout_height="13dp"
-            android:layout_marginEnd="4dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_bolt"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/level2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/row3"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:id="@+id/dot3"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/widget_dot" />
-
-        <TextView
-            android:id="@+id/name3"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/widget_text"
-            android:textSize="14sp" />
-
-        <ImageView
-            android:id="@+id/bolt3"
-            android:layout_width="13dp"
-            android:layout_height="13dp"
-            android:layout_marginEnd="4dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_bolt"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/level3"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/row4"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:visibility="gone">
-
-        <ImageView
-            android:id="@+id/dot4"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/widget_dot" />
-
-        <TextView
-            android:id="@+id/name4"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="@color/widget_text"
-            android:textSize="14sp" />
-
-        <ImageView
-            android:id="@+id/bolt4"
-            android:layout_width="13dp"
-            android:layout_height="13dp"
-            android:layout_marginEnd="4dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/ic_bolt"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/level4"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFeatureSettings="tnum"
-            android:textColor="@color/widget_text_secondary"
-            android:textSize="13sp" />
-    </LinearLayout>
-
-</LinearLayout>
+</FrameLayout>

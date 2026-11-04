@@ -13,20 +13,27 @@ lights and read its battery).
 - **Light-bar colours.** A controller seen for the first time gets the next free colour
   automatically: DualSense 1 blue, 2 red, 3 green, 4 pink (the PS5's own player colours),
   then orange, cyan, purple, yellow and white, skipping colours already in use. Pick any
-  colour from the presets or with hue, saturation and brightness sliders; the real light
-  bar follows the sliders live.
+  colour from the presets, or tap "+" for a colour wheel; the real light bar follows the
+  wheel live.
 - **Player lights.** The five small LEDs show the controller's number with the PS5's
   patterns (1 = centre, 2 = inner pair, 3 = centre and outer pair, 4 = all but the centre,
   5 = all).
-- **Players.** Create players (a name and a colour) and give each one the controller they
-  pick up; the controller then shows the player's name and colour. A player uses one
-  controller at a time. Without a player a controller is "DualSense n".
-- **Find.** Makes a controller rumble and blink its lights, to tell which one it is.
+- **Players.** Create players (a name and a colour) with "+" and give each one the
+  controller they pick up; the controller then shows the player's name and colour. A player
+  uses one controller at a time. Long-press a player to rename, recolour or delete them.
+  Without a player a controller is "DualSense n".
+- **Order.** Long-press a connected controller and drag it to move it: controllers are
+  numbered in the order shown, so dragging the second above the first swaps their numbers
+  (and their player lights and automatic colours).
+- **Find.** Makes a controller rumble and blink its lights for about two seconds.
+- **Pressed buttons.** While the app is open, buttons, sticks and triggers pressed on a
+  controller light up on its drawing and its cell glows brighter.
 - **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
-  notifications when a controller's battery runs low (10–20 %, then 0–10 %) and when it is
-  fully charged. Both can be turned off in Settings.
-- **At a glance.** A home-screen widget and a Quick Settings tile with the batteries of
-  the connected controllers.
+  notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
+  charged. Both can be turned off in Settings.
+- **At a glance.** A home-screen widget with a tile per connected controller (its drawing in
+  its colour, name and battery; more controllers scroll), a Quick Settings tile, and the
+  service's notification showing the same.
 - **Remembered controllers.** Controllers that are not connected stay listed, dimmed, with
   when they were last seen; "Forget" frees their number and colour.
 - **Light and dark.** System, Light or Dark, in Settings.
@@ -60,14 +67,17 @@ redrawing.
   stops 20 s after the last one disconnects.
 - **Battery.** `InputDevice.getBatteryState()`. The controller reports its charge as a
   level d in {0, …, 10} and the driver publishes p = min(10d + 5, 100) %, so a reported
-  p with p ≡ 5 (mod 10) only says that the charge lies in [p − 5, p + 5); the app shows
-  that interval, e.g. "50–60%".
+  p with p ≡ 5 (mod 10) only says that the charge lies in [p − 5, p + 5). The app shows
+  the lower end, p − 5 (e.g. "50%"), a value the charge is guaranteed to reach.
 - **Bluetooth or USB.** There is no public API for this. Over USB the kernel names the
   device from its USB strings ("Sony Interactive Entertainment DualSense Wireless
   Controller"), over Bluetooth from its Bluetooth name ("DualSense Wireless Controller");
   and if no Sony controller is attached over USB at all (`UsbManager`), all are on
   Bluetooth.
 - **Rumble.** `InputDevice.getVibratorManager()`.
+- **Pressed buttons.** The activity receives the controllers' key and joystick events while
+  it is in front and maps them to parts of the drawing; it keeps them, so a button such as
+  Circle doesn't act as Back in the app.
 - **Starting in the background.** `ConnectionReceiver` listens for Bluetooth connections;
   Android allows starting the light service from that broadcast.
 
@@ -87,7 +97,8 @@ minSdk 31).
 
 Debug builds show sample controllers when started with
 `adb shell am start -n com.philpf.dualsensemanager/.MainActivity --ez demo true`
-(optionally `--es theme light|dark` and `--es open settings|demo-1`).
+(optionally `--es theme light|dark`, `--es open settings|demo-1|widget` and
+`--es press CROSS,L1`).
 
 ## Project layout
 
@@ -107,3 +118,4 @@ Debug builds show sample controllers when started with
   [daidr/dualsense-tester](https://github.com/daidr/dualsense-tester), © 2023 Xuezhou
   Dai, MIT License (full notice in `ui/art/ControllerArt.kt`).
 - The settings and delete icons follow Google's Material Icons (Apache License 2.0).
+- The app icon, widget tiles and notification use the outline of the same drawing.

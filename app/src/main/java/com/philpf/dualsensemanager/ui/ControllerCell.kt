@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
+import com.philpf.dualsensemanager.core.ControllerPart
 import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.RelativeTime
@@ -63,6 +64,7 @@ fun ControllerCell(
     onFind: () -> Unit,
     onGlow: (Offset) -> Unit,
     modifier: Modifier = Modifier,
+    pressed: Set<ControllerPart> = emptySet(),
 ) {
     val glass = LocalGlass.current
     val live = view.live
@@ -86,6 +88,7 @@ fun ControllerCell(
                 light = light,
                 ink = glass.ink,
                 lit = live?.lightBar == true,
+                pressed = pressed,
                 modifier = Modifier
                     .width(ArtWidth)
                     .alpha(if (live != null) 1f else 0.55f)
@@ -156,7 +159,7 @@ private fun BatteryLevel(battery: BatteryReading?) {
     val tint = if (low) glass.danger else glass.textPrimary
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         BatteryGlyph(
-            fraction = percent?.let { it / 100f },
+            fraction = percent?.let { BatteryText.fraction(it) },
             tint = tint.copy(alpha = 0.75f),
             fill = if (charging) glass.charging else tint,
         )
@@ -170,7 +173,7 @@ private fun AwayStatus(view: ControllerView, now: Long) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         val last = view.profile.lastBattery
         if (last >= 0) {
-            BatteryGlyph(fraction = last / 100f, tint = glass.textTertiary, fill = glass.textTertiary)
+            BatteryGlyph(fraction = BatteryText.fraction(last), tint = glass.textTertiary, fill = glass.textTertiary)
         }
         Text(
             text = RelativeTime.since(now, view.profile.lastSeen),

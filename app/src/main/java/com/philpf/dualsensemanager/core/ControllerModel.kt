@@ -80,3 +80,12 @@ data class ControllerView(val profile: ControllerProfile, val player: Player?, v
 }
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/** Buttons and sticks of the controller, for lighting up what is being pressed. */
+enum class ControllerPart {
+    CROSS, CIRCLE, SQUARE, TRIANGLE,
+    DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
+    L1, R1, L2, R2,
+    LEFT_STICK, RIGHT_STICK, L3, R3,
+    CREATE, OPTIONS, PS, MUTE, TOUCHPAD,
+}

@@ -16,7 +16,9 @@ shot() {
 
 shot main-dark --es theme dark
 shot main-light --es theme light
+shot pressed-dark --es theme dark --es press CROSS,L1,LEFT_STICK
 shot controller-dark --es theme dark --es open demo-1
 shot controller-light --es theme light --es open demo-2
 shot settings-light --es theme light --es open settings
+shot widget --es theme light --es open widget
 ls -l screenshots

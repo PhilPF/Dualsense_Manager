@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.philpf.dualsensemanager.core.ControllerKind
 import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LedPalette
+import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.PlayerCodec
 import com.philpf.dualsensemanager.core.Players
@@ -98,6 +99,14 @@ class ProfileStore(context: Context, name: String = "controllers") {
             if (id !in _players.value) return
             writeProfiles(Players.unassign(_profiles.value, id))
             writePlayers(_players.value - id)
+        }
+    }
+
+    /** Renumbers the controllers in [order]; see [Numbering.reorder]. */
+    fun reorder(order: List<String>) {
+        synchronized(lock) {
+            val next = Numbering.reorder(_profiles.value, order, _players.value.values.map { it.color })
+            if (next != _profiles.value) writeProfiles(next)
         }
     }
 

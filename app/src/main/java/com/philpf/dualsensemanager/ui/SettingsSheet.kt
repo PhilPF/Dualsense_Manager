@@ -70,12 +70,4 @@ fun ColumnScope.SettingsSheetContent(settings: SettingsStore, theme: ThemeMode, 
         }
     }
 
-    Spacer(Modifier.height(28.dp))
-    Text(
-        text = "Controller drawing © Xuezhou Dai, MIT licence",
-        style = GlassType.caption,
-        color = glass.textTertiary,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth(),
-    )
 }

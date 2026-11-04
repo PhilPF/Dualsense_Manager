@@ -31,12 +31,12 @@ object LedPalette {
     /**
      * The automatic colour for controller number [number]: its own palette slot when no other
      * remembered controller uses that colour, otherwise the first unused palette colour; if all
-     * are used, the slot colour anyway.
+     * are used, the slot colour anyway. A controller without a number (0) has no slot.
      */
     fun automaticColor(number: Int, takenColors: Iterable<Int>): Int {
         val taken = takenColors.mapTo(HashSet()) { it and 0xFFFFFF }
-        val preferred = colors[(number - 1).mod(colors.size)].rgb
-        if (preferred !in taken) return preferred
+        val preferred = colors[(maxOf(number, 1) - 1).mod(colors.size)].rgb
+        if (number > 0 && preferred !in taken) return preferred
         return colors.firstOrNull { it.rgb !in taken }?.rgb ?: preferred
     }
 

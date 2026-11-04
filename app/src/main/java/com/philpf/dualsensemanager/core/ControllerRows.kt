@@ -1,7 +1,10 @@
 package com.philpf.dualsensemanager.core
 
 object ControllerViews {
-    /** Connected controllers ordered by number, then remembered ones, most recently seen first. */
+    /**
+     * Connected controllers ordered by number (those without one last), then remembered ones,
+     * most recently seen first.
+     */
     fun build(
         profiles: Collection<ControllerProfile>,
         players: Map<String, Player>,
@@ -9,7 +12,10 @@ object ControllerViews {
     ): List<ControllerView> {
         val liveById = live.associateBy { it.id }
         fun view(p: ControllerProfile) = ControllerView(p, p.playerId?.let { players[it] }, liveById[p.id])
-        val connected = profiles.filter { it.id in liveById }.sortedBy { it.number }.map(::view)
+        val connected = profiles
+            .filter { it.id in liveById }
+            .sortedWith(compareBy<ControllerProfile> { it.number <= 0 }.thenBy { it.number }.thenBy { it.id })
+            .map(::view)
         val away = profiles
             .filter { it.id !in liveById }
             .sortedWith(compareByDescending<ControllerProfile> { it.lastSeen }.thenBy { it.number })
@@ -64,36 +70,60 @@ object Numbering {
         val numbers = ids.map { profiles.getValue(it).number }.sorted()
         val next = profiles.toMutableMap()
         ids.forEachIndexed { i, id -> next[id] = next.getValue(id).copy(number = numbers[i]) }
-        recolour(next, ids, playerColors)
+        recolour(next, listOf(ids), playerColors)
         return next
     }
 
     /**
-     * Numbers every controller 1, 2, 3, ...: those in [order] first, in that order, then the
-     * others in their current order. Automatic colours follow the numbers, as in [reorder].
+     * Gives the controllers in [numbers] those numbers, 0 meaning none. Any other controller
+     * holding one of them moves to the smallest number still free. Automatic colours follow the
+     * new numbers: those given a number choose first, then those left without one keep their
+     * colour if it is still free, and those moved aside choose last.
      */
-    fun ranked(
+    fun set(
         profiles: Map<String, ControllerProfile>,
-        order: List<String>,
+        numbers: Map<String, Int>,
         playerColors: Collection<Int>,
     ): Map<String, ControllerProfile> {
-        val first = order.distinct().filter { it in profiles }
-        val ids = first + profiles.values.filter { it.id !in first }.sortedBy { it.number }.map { it.id }
+        val wanted = numbers.filterKeys { it in profiles }.mapValues { maxOf(it.value, 0) }
+        if (wanted.isEmpty()) return profiles
         val next = profiles.toMutableMap()
-        ids.forEachIndexed { i, id -> next[id] = next.getValue(id).copy(number = i + 1) }
-        recolour(next, ids, playerColors)
+        for ((id, number) in wanted) next[id] = next.getValue(id).copy(number = number)
+        val claimed = wanted.values.filterTo(HashSet()) { it > 0 }
+        val displaced = next.values.filter { it.id !in wanted && it.number in claimed }.sortedBy { it.number }
+        val used = next.values.filter { p -> displaced.none { it.id == p.id } && p.number > 0 }.mapTo(HashSet()) { it.number }
+        for (p in displaced) {
+            val number = LedPalette.nextNumber(used)
+            used += number
+            next[p.id] = p.copy(number = number)
+        }
+        recolour(next, listOf(wanted.keys, displaced.map { it.id }), playerColors)
         return next
     }
 
-    /** Gives the controllers among [ids] with automatic colours the colours of their numbers. */
-    private fun recolour(profiles: MutableMap<String, ControllerProfile>, ids: List<String>, playerColors: Collection<Int>) {
-        val recolour = ids.map { profiles.getValue(it) }.filter { !it.customColor }.sortedBy { it.number }
-        val recolourIds = recolour.mapTo(HashSet()) { it.id }
-        val taken = (profiles.values.filter { it.id !in recolourIds }.map { it.color } + playerColors).toMutableList()
-        for (p in recolour) {
-            val color = LedPalette.automaticColor(p.number, taken)
-            taken += color
-            profiles[p.id] = p.copy(color = color)
+    /**
+     * Gives the controllers in [groups] that have automatic colours the colours of their numbers,
+     * group after group, each choosing among the colours the earlier ones left: within a group,
+     * those with numbers in order of number, then those without a number keep their colour if it
+     * is still free, or take the first free one.
+     */
+    private fun recolour(profiles: MutableMap<String, ControllerProfile>, groups: List<Collection<String>>, playerColors: Collection<Int>) {
+        val automatic = groups.flatten().distinct().map { profiles.getValue(it) }.filter { !it.customColor }
+        val automaticIds = automatic.mapTo(HashSet()) { it.id }
+        val taken = (profiles.values.filter { it.id !in automaticIds }.map { it.color } + playerColors).toMutableList()
+        val done = HashSet<String>()
+        for (group in groups) {
+            val members = group.distinct().filter { it in automaticIds && done.add(it) }.map { profiles.getValue(it) }
+            for (p in members.filter { it.number > 0 }.sortedBy { it.number }) {
+                val color = LedPalette.automaticColor(p.number, taken)
+                taken += color
+                profiles[p.id] = p.copy(color = color)
+            }
+            for (p in members.filter { it.number <= 0 }) {
+                val color = if (p.color !in taken) p.color else LedPalette.automaticColor(0, taken)
+                taken += color
+                profiles[p.id] = p.copy(color = color)
+            }
         }
     }
 
@@ -112,9 +142,10 @@ object PlayerLeds {
     /**
      * The PS5's player-indicator patterns over the five LEDs (positions 1–5, left to right),
      * as Linux's hid-playstation draws them: 1 = centre, 2 = inner pair, 3 = centre and outer
-     * pair, 4 = all but the centre, 5 = all. Larger numbers repeat the cycle.
+     * pair, 4 = all but the centre, 5 = all. Larger numbers repeat the cycle; without a number
+     * (0) all are off.
      */
-    fun pattern(number: Int): Set<Int> = when ((number - 1).mod(5) + 1) {
+    fun pattern(number: Int): Set<Int> = if (number <= 0) emptySet() else when ((number - 1).mod(5) + 1) {
         1 -> setOf(3)
         2 -> setOf(2, 4)
         3 -> setOf(1, 3, 5)

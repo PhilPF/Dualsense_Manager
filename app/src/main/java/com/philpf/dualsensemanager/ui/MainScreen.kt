@@ -9,6 +9,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -59,7 +60,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -69,7 +69,6 @@ import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.ControllerViews
 import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Players
-import com.philpf.dualsensemanager.core.PressOrder
 import com.philpf.dualsensemanager.core.ThemeMode
 import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
@@ -102,7 +101,8 @@ const val OPEN_ORDER = "order"
  * The one screen: a cell per controller, each glowing in its light colour, under a floating
  * glass bar; sheets for a controller, a player and settings. Long-press and drag a connected
  * controller to move it: controllers are numbered in this order. Or put them in order from
- * the bar: each player presses a button on their controller in turn. Pressing anything on a
+ * the bar: the list turns into empty places, and each controller that holds L2 + R2 takes the
+ * next one. Pressing anything on a
  * controller floods its cell with its colour; its sheet shows which buttons are pressed and
  * where the sticks are.
  *
@@ -185,38 +185,33 @@ fun MainScreen(
         }
     }
 
-    // Putting the controllers in order by pressing: each connected controller's first press
-    // takes the next number, and its player lights and place in the list follow at once.
-    var ordering by remember { mutableStateOf(if (initiallyOpen == OPEN_ORDER) PressOrder() else null) }
+    // Putting the controllers in order: the list turns into empty places, and each controller
+    // that holds L2 + R2 takes the next one (see core/PressOrder).
+    val ordering by source.ordering.collectAsState()
+    LaunchedEffect(Unit) { if (initiallyOpen == OPEN_ORDER) source.startOrdering() }
     val latestViews by rememberUpdatedState(views)
     LaunchedEffect(ordering != null) {
         if (ordering == null) return@LaunchedEffect
-        var seen = input.presses.value
-        input.presses.collect { counts ->
-            val fresh = counts.filter { (device, count) -> count > (seen[device] ?: 0) }.keys
-            seen = counts
-            for (device in fresh) {
+        input.pressed.collect { held ->
+            for ((device, parts) in held) {
+                if (ControllerPart.L2 !in parts || ControllerPart.R2 !in parts) continue
                 val view = latestViews.firstOrNull { it.live?.deviceId == device } ?: continue
-                val current = ordering ?: break
-                val next = current.press(view.id)
-                if (next == current) continue
-                ordering = next
-                source.numberInOrder(next.order(latestViews.map { it.id }))
-                source.nudge(view.id)
+                source.joinOrder(view.id)
             }
-            if (ordering?.complete(latestViews.filter { it.isConnected }.map { it.id }) == true) ordering = null
         }
     }
-    BackHandler(enabled = ordering != null) { ordering = null }
+    BackHandler(enabled = ordering != null) { source.stopOrdering() }
 
     // Reordering connected controllers by dragging.
     val pitch = with(LocalDensity.current) { (CellHeight + CellGap).toPx() }
     val connectedIds = views.filter { it.isConnected }.map { it.id }
-    val latestConnectedIds by rememberUpdatedState(connectedIds)
+    // Only numbered controllers can be dragged: their numbers follow the order.
+    val draggableIds = views.filter { it.isConnected && it.profile.number > 0 }.map { it.id }
+    val latestConnectedIds by rememberUpdatedState(draggableIds)
     var dragId by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    val dragFrom = connectedIds.indexOf(dragId)
-    val dragTo = if (dragFrom < 0) -1 else (dragFrom + (dragOffset / pitch).roundToInt()).coerceIn(0, connectedIds.lastIndex)
+    val dragFrom = draggableIds.indexOf(dragId)
+    val dragTo = if (dragFrom < 0) -1 else (dragFrom + (dragOffset / pitch).roundToInt()).coerceIn(0, draggableIds.lastIndex)
 
     // Where each connected controller's light is on screen; read while drawing, so scrolling
     // only redraws the background.
@@ -228,7 +223,7 @@ fun MainScreen(
         Box(Modifier.fillMaxSize().backdropSource(content)) {
             GlowBackground(
                 spots = {
-                    views.filter { it.isConnected }.mapNotNull { v ->
+                    views.filter { v -> v.isConnected && ordering?.let { v.id in it.joined } != false }.mapNotNull { v ->
                         val at = glowAt[v.id] ?: return@mapNotNull null
                         val focus = if (shownId == null || v.id == shownId) 1f else othersGlow
                         GlowSpot(at, lightOf(v), focus)
@@ -247,65 +242,104 @@ fun MainScreen(
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                 Spacer(Modifier.height(TopBarHeight + 2.dp - CellGap))
                 if (views.isEmpty()) EmptyCell(background, onBluetooth = { openBluetoothSettings(context) })
-                for (view in views) {
-                    key(view.id) {
-                        val index = connectedIds.indexOf(view.id)
-                        val shift = when {
-                            dragId == null || index < 0 || view.id == dragId -> 0f
-                            index in (dragFrom + 1)..dragTo -> -pitch
-                            index in dragTo until dragFrom -> pitch
-                            else -> 0f
+
+                @Composable
+                fun Cell(view: ControllerView, modifier: Modifier = Modifier) = ControllerCell(
+                    view = view,
+                    light = lightOf(view),
+                    backdrop = background,
+                    now = now,
+                    presses = view.live?.let { presses[it.deviceId] } ?: 0,
+                    onOpen = {
+                        openId = view.id
+                        shownId = view.id
+                    },
+                    onFind = { source.identify(view.id) },
+                    onGlow = { glowAt[view.id] = it },
+                    modifier = modifier,
+                )
+
+                val order = ordering
+                if (order != null) {
+                    // One place per connected controller: those taken show it, the rest wait for
+                    // L2 + R2, lighting each trigger while a waiting controller holds it.
+                    val placed = order.joined.mapNotNull { id -> views.firstOrNull { it.id == id && it.isConnected } }
+                    val waiting = order.waiting(connectedIds)
+                    fun held(part: ControllerPart) = waiting.any { id ->
+                        val device = views.firstOrNull { it.id == id }?.live?.deviceId
+                        device != null && part in pressed[device].orEmpty()
+                    }
+                    val heldL2 = held(ControllerPart.L2)
+                    val heldR2 = held(ControllerPart.R2)
+                    for (place in 0 until placed.size + waiting.size) {
+                        key("place-$place") {
+                            Crossfade(targetState = placed.getOrNull(place)?.id, label = "place") { id ->
+                                val view = views.firstOrNull { it.id == id }
+                                if (view != null) {
+                                    Cell(view)
+                                } else {
+                                    EmptySlot(
+                                        number = place + 1,
+                                        next = place == placed.size,
+                                        l2 = heldL2,
+                                        r2 = heldR2,
+                                        backdrop = background,
+                                    )
+                                }
+                            }
                         }
-                        val animatedShift by animateFloatAsState(shift, tween(180), label = "reorder")
-                        val dragging = view.id == dragId
-                        ControllerCell(
-                            view = view,
-                            light = lightOf(view),
-                            backdrop = background,
-                            now = now,
-                            presses = view.live?.let { presses[it.deviceId] } ?: 0,
-                            onOpen = {
-                                openId = view.id
-                                shownId = view.id
-                            },
-                            onFind = { source.identify(view.id) },
-                            onGlow = { glowAt[view.id] = it },
-                            modifier = Modifier
-                                .zIndex(if (dragging) 1f else 0f)
-                                .offset { IntOffset(0, (if (dragging) dragOffset else animatedShift).roundToInt()) }
-                                .scale(if (dragging) 1.03f else 1f)
-                                .then(
-                                    if (index < 0) {
-                                        Modifier
-                                    } else {
-                                        Modifier.pointerInput(view.id) {
-                                            detectDragGesturesAfterLongPress(
-                                                onDragStart = {
-                                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    dragId = view.id
-                                                    dragOffset = 0f
-                                                },
-                                                onDrag = { change, amount ->
-                                                    change.consume()
-                                                    dragOffset += amount.y
-                                                },
-                                                onDragEnd = {
-                                                    val ids = latestConnectedIds
-                                                    val from = ids.indexOf(view.id)
-                                                    val to = (from + (dragOffset / pitch).roundToInt()).coerceIn(0, ids.lastIndex)
-                                                    if (from >= 0 && to != from) source.reorder(Numbering.moved(ids, from, to))
-                                                    dragId = null
-                                                    dragOffset = 0f
-                                                },
-                                                onDragCancel = {
-                                                    dragId = null
-                                                    dragOffset = 0f
-                                                },
-                                            )
-                                        }
-                                    },
-                                ),
-                        )
+                    }
+                } else {
+                    for (view in views) {
+                        key(view.id) {
+                            val index = draggableIds.indexOf(view.id)
+                            val shift = when {
+                                dragId == null || index < 0 || view.id == dragId -> 0f
+                                index in (dragFrom + 1)..dragTo -> -pitch
+                                index in dragTo until dragFrom -> pitch
+                                else -> 0f
+                            }
+                            val animatedShift by animateFloatAsState(shift, tween(180), label = "reorder")
+                            val dragging = view.id == dragId
+                            Cell(
+                                view = view,
+                                modifier = Modifier
+                                    .zIndex(if (dragging) 1f else 0f)
+                                    .offset { IntOffset(0, (if (dragging) dragOffset else animatedShift).roundToInt()) }
+                                    .scale(if (dragging) 1.03f else 1f)
+                                    .then(
+                                        if (index < 0) {
+                                            Modifier
+                                        } else {
+                                            Modifier.pointerInput(view.id) {
+                                                detectDragGesturesAfterLongPress(
+                                                    onDragStart = {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        dragId = view.id
+                                                        dragOffset = 0f
+                                                    },
+                                                    onDrag = { change, amount ->
+                                                        change.consume()
+                                                        dragOffset += amount.y
+                                                    },
+                                                    onDragEnd = {
+                                                        val ids = latestConnectedIds
+                                                        val from = ids.indexOf(view.id)
+                                                        val to = (from + (dragOffset / pitch).roundToInt()).coerceIn(0, ids.lastIndex)
+                                                        if (from >= 0 && to != from) source.reorder(Numbering.moved(ids, from, to))
+                                                        dragId = null
+                                                        dragOffset = 0f
+                                                    },
+                                                    onDragCancel = {
+                                                        dragId = null
+                                                        dragOffset = 0f
+                                                    },
+                                                )
+                                            }
+                                        },
+                                    ),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -317,10 +351,10 @@ fun MainScreen(
             showPermission = !nearbyGranted,
             onPermission = askAgain,
             onSettings = { settingsOpen = true },
-            ordering = ordering?.next,
+            ordering = ordering != null,
             canOrder = connectedIds.size >= 2,
-            onOrder = { ordering = PressOrder() },
-            onStopOrdering = { ordering = null },
+            onOrder = source::startOrdering,
+            onStopOrdering = source::stopOrdering,
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
@@ -375,8 +409,8 @@ fun MainScreen(
 
 /**
  * Floating glass capsule: the app's name, and buttons for permissions (when missing), putting the
- * controllers in order (with two or more connected) and settings. While [ordering], it asks for
- * a press for that place instead.
+ * controllers in order (with two or more connected) and settings; while [ordering], only a button
+ * to stop.
  */
 @Composable
 private fun TopBar(
@@ -384,7 +418,7 @@ private fun TopBar(
     showPermission: Boolean,
     onPermission: () -> Unit,
     onSettings: () -> Unit,
-    ordering: Int?,
+    ordering: Boolean,
     canOrder: Boolean,
     onOrder: () -> Unit,
     onStopOrdering: () -> Unit,
@@ -404,26 +438,19 @@ private fun TopBar(
             Modifier.fillMaxSize().padding(start = 22.dp, end = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (ordering != null) {
-                Text(
-                    text = "Player $ordering · press any button",
-                    style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+            Text(
+                text = "Dualsense Manager",
+                style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            if (ordering) {
                 GlassIconButton(onClick = onStopOrdering, label = "Done") {
                     CloseIcon(glass.textPrimary, Modifier.size(16.dp))
                 }
             } else {
-                Text(
-                    text = "Dualsense Manager",
-                    style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
                 if (canOrder) {
-                    GlassIconButton(onClick = onOrder, label = "Put in order by pressing a button") {
+                    GlassIconButton(onClick = onOrder, label = "Put the controllers in order") {
                         OrderIcon(glass.textPrimary, Modifier.size(21.dp))
                     }
                     Spacer(Modifier.width(6.dp))

@@ -27,6 +27,7 @@ data class Player(val id: String, val name: String, val color: Int)
  */
 data class ControllerProfile(
     val id: String,
+    /** Its number, from 1; 0 when it has none (left out when putting controllers in order). */
     val number: Int,
     val kind: ControllerKind,
     /** The controller's own light-bar colour (0xRRGGBB), used when no player is assigned. */
@@ -44,8 +45,8 @@ data class ControllerProfile(
     /** How fast it charges, learned over time, in % per hour; 0 if not yet. */
     val chargeRate: Float = 0f,
 ) {
-    /** "DualSense 2", "DualSense Edge 3", ... */
-    val defaultName: String get() = "${kind.label} $number"
+    /** "DualSense 2", "DualSense Edge 3", ...; "DualSense" without a number. */
+    val defaultName: String get() = if (number > 0) "${kind.label} $number" else kind.label
 }
 
 enum class ChargeStatus { CHARGING, DISCHARGING, FULL, NOT_CHARGING, UNKNOWN }

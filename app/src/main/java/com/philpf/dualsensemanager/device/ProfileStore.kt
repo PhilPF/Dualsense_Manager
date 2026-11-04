@@ -46,11 +46,21 @@ class ProfileStore(context: Context, name: String = "controllers") {
 
     /**
      * The profile for [id], created on first sight with the smallest free number and an
-     * automatic colour that no other controller or player uses.
+     * automatic colour that no other controller or player uses. A controller left without a
+     * number (when putting controllers in order) gets one again when it connects.
      */
     fun ensure(id: String, kind: ControllerKind, now: Long): ControllerProfile {
         synchronized(lock) {
-            _profiles.value[id]?.let { return it }
+            _profiles.value[id]?.let { existing ->
+                if (existing.number > 0) return existing
+                val number = LedPalette.nextNumber(_profiles.value.values.map { it.number })
+                val renumbered = existing.copy(
+                    number = number,
+                    color = if (existing.customColor) existing.color else LedPalette.automaticColor(number, colorsInUse(exceptController = id)),
+                )
+                writeProfiles(_profiles.value + (id to renumbered))
+                return renumbered
+            }
             val number = LedPalette.nextNumber(_profiles.value.values.map { it.number })
             val profile = ControllerProfile(
                 id = id,
@@ -110,10 +120,10 @@ class ProfileStore(context: Context, name: String = "controllers") {
         }
     }
 
-    /** Numbers all controllers from 1, those in [order] first; see [Numbering.ranked]. */
-    fun rank(order: List<String>) {
+    /** Gives controllers these numbers (0: none); see [Numbering.set]. */
+    fun setNumbers(numbers: Map<String, Int>) {
         synchronized(lock) {
-            val next = Numbering.ranked(_profiles.value, order, _players.value.values.map { it.color })
+            val next = Numbering.set(_profiles.value, numbers, _players.value.values.map { it.color })
             if (next != _profiles.value) writeProfiles(next)
         }
     }

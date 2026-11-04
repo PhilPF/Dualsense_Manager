@@ -24,10 +24,14 @@ lights and read its battery).
   Without a player a controller is "DualSense n".
 - **Order.** Long-press a connected controller and drag it to move it: controllers are
   numbered in the order shown, so dragging the second above the first swaps their numbers
-  (and their player lights and automatic colours). Or tap the numbered list in the bar and
-  have each player press any button on their controller in turn, as on a console: the first
-  becomes number 1, the next 2, and so on; each controller buzzes twice when it takes its
-  place, and its player lights show it at once.
+  (and their player lights and automatic colours). Or tap the numbered list in the bar: the
+  list turns into empty places showing L2 + R2, and as on a console, the first controller to
+  hold both triggers takes place 1, the next place 2, and so on. Each buzzes twice when it
+  takes its place, and its player lights show it at once (they are off while it waits). When
+  one controller is left it takes the last place by itself, so with two controllers one press
+  is enough. Leaving earlier (✕, back, or the app) leaves those still waiting without a number
+  ("DualSense", lights off) until they reconnect; leaving before anyone pressed changes
+  nothing.
 - **Find.** Makes a controller rumble with both motors at full strength (the most Android
   allows) and blink its lights, for about 3.4 seconds.
 - **Which one is this?** While the app is open, pressing anything on a controller floods its

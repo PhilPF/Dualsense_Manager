@@ -1,6 +1,8 @@
 package com.philpf.dualsensemanager.device
 
 import android.content.IntentSender
+import android.os.Handler
+import android.os.Looper
 import com.philpf.dualsensemanager.core.BatteryEta
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.ChargeStatus
@@ -11,6 +13,7 @@ import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.Players
+import com.philpf.dualsensemanager.core.PressOrder
 import com.philpf.dualsensemanager.core.Transport
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -101,11 +104,33 @@ class DemoSource : ControllerSource {
         _profiles.update { Numbering.reorder(it, order, _players.value.values.map { p -> p.color }) }
     }
 
-    override fun numberInOrder(order: List<String>) {
-        _profiles.update { Numbering.ranked(it, order, _players.value.values.map { p -> p.color }) }
+    private val _ordering = MutableStateFlow<PressOrder?>(null)
+    override val ordering: StateFlow<PressOrder?> = _ordering.asStateFlow()
+
+    override fun startOrdering() {
+        if (_live.value.size >= 2) _ordering.value = PressOrder()
     }
 
-    override fun nudge(controllerId: String) = Unit
+    override fun joinOrder(controllerId: String) {
+        val current = _ordering.value ?: return
+        val connected = _live.value.map { it.id }
+        val (next, numbers) = current.press(controllerId, connected)
+        setNumbers(numbers)
+        _ordering.value = next
+        if (next.complete(connected)) {
+            Handler(Looper.getMainLooper()).postDelayed({ if (_ordering.value === next) _ordering.value = null }, 1_200L)
+        }
+    }
+
+    override fun stopOrdering() {
+        val current = _ordering.value ?: return
+        setNumbers(current.stop(_live.value.map { it.id }))
+        _ordering.value = null
+    }
+
+    private fun setNumbers(numbers: Map<String, Int>) {
+        _profiles.update { Numbering.set(it, numbers, _players.value.values.map { p -> p.color }) }
+    }
 
     override fun deletePlayer(playerId: String) {
         _profiles.update { Players.unassign(it, playerId) }

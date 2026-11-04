@@ -32,6 +32,7 @@ import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.Transport
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.PlayerLeds
+import com.philpf.dualsensemanager.core.PressOrder
 import com.philpf.dualsensemanager.core.Players
 import com.philpf.dualsensemanager.core.TransportRules
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +78,9 @@ class ControllerManager(
     private val _previews = MutableStateFlow<Map<String, Int>>(emptyMap())
     override val previews: StateFlow<Map<String, Int>> = _previews.asStateFlow()
 
+    private val _ordering = MutableStateFlow<PressOrder?>(null)
+    override val ordering: StateFlow<PressOrder?> = _ordering.asStateFlow()
+
     /** A connected controller and the light session that holds its lights. */
     private class Attached(val deviceId: Int, val id: String) {
         var session: LightsManager.LightsSession? = null
@@ -88,6 +92,7 @@ class ControllerManager(
     private val pendingApply = HashSet<String>()
     private val blink = HashMap<String, Boolean>()
     private val alertStates = HashMap<String, AlertState>()
+    private var orderDone: Runnable? = null
     private val tracks = HashMap<String, BatteryTrack>()
 
     // The learned rate when each track began, so a connection's own steps are not counted twice.
@@ -120,10 +125,13 @@ class ControllerManager(
         }
     }
 
-    /** The app's screen is visible: refresh now and poll the batteries more often. */
+    /**
+     * The app's screen is visible: refresh now and poll the batteries more often. Leaving it
+     * stops putting controllers in order.
+     */
     fun setUiVisible(visible: Boolean) {
         uiVisible = visible
-        if (visible) handler.post { rescan() }
+        if (visible) handler.post { rescan() } else stopOrdering()
     }
 
     override fun preview(controllerId: String, rgb: Int) {
@@ -181,16 +189,51 @@ class ControllerManager(
         applyAll()
     }
 
-    override fun numberInOrder(order: List<String>) {
-        store.rank(order)
-        applyAll()
-    }
-
-    override fun nudge(controllerId: String) {
+    override fun startOrdering() {
         handler.post {
-            for (a in attached.values.filter { it.id == controllerId }) vibrate(a.deviceId, NUDGE_TIMINGS, NUDGE_AMPLITUDES)
+            if (_ordering.value != null || _live.value.size < 2) return@post
+            orderDone?.let(handler::removeCallbacks)
+            _ordering.value = PressOrder()
+            attached.values.forEach(::applyLight)
         }
     }
+
+    override fun joinOrder(controllerId: String) {
+        handler.post {
+            val current = _ordering.value ?: return@post
+            val connected = connectedIds()
+            val (next, numbers) = current.press(controllerId, connected)
+            if (next == current) return@post
+            store.setNumbers(numbers)
+            _ordering.value = next
+            // Two quick buzzes: you have your place (the last one is placed without pressing).
+            for (id in next.joined - current.joined.toSet()) {
+                attached.values.filter { it.id == id }.forEach { vibrate(it.deviceId, NUDGE_TIMINGS, NUDGE_AMPLITUDES) }
+            }
+            attached.values.forEach(::applyLight)
+            if (next.complete(connected)) {
+                // Everyone has a place: show it a moment, then go back to the list.
+                val done = Runnable { if (_ordering.value === next) finishOrdering() }
+                orderDone = done
+                handler.postDelayed(done, ORDER_SHOWN_MS)
+            }
+        }
+    }
+
+    override fun stopOrdering() {
+        handler.post { finishOrdering() }
+    }
+
+    private fun finishOrdering() {
+        val current = _ordering.value ?: return
+        orderDone?.let(handler::removeCallbacks)
+        orderDone = null
+        store.setNumbers(current.stop(connectedIds()))
+        _ordering.value = null
+        attached.values.forEach(::applyLight)
+    }
+
+    private fun connectedIds(): List<String> = _live.value.map { it.id }.distinct()
 
     override fun deletePlayer(playerId: String) {
         store.deletePlayer(playerId)
@@ -313,10 +356,12 @@ class ControllerManager(
             false -> 0
             else -> _previews.value[a.id] ?: store.colorOf(profile)
         }
+        // While controllers are being put in order, those still waiting show no number.
+        val number = if (_ordering.value?.let { a.id !in it.joined } == true) 0 else profile.number
         val playerLeds = when (blinking) {
             true -> setOf(1, 2, 3, 4, 5)
             false -> emptySet()
-            null -> PlayerLeds.pattern(profile.number)
+            null -> PlayerLeds.pattern(number)
         }
 
         val request = LightsRequest.Builder()
@@ -324,7 +369,7 @@ class ControllerManager(
         for (light in lights) {
             val state = when {
                 light.hasRgbControl() -> LightState.Builder().setColor(OPAQUE or (color and 0xFFFFFF)).build()
-                light.type == Light.LIGHT_TYPE_PLAYER_ID -> LightState.Builder().setPlayerId(profile.number).build()
+                light.type == Light.LIGHT_TYPE_PLAYER_ID -> LightState.Builder().setPlayerId(number).build()
                 light.type == Light.LIGHT_TYPE_INPUT -> {
                     val position = PlayerLeds.position(light.name) ?: continue
                     LightState.Builder().setColor(if (position in playerLeds) LED_ON else LED_OFF).build()
@@ -471,6 +516,9 @@ class ControllerManager(
         // two short breaks so the buzz pulses and is easier to locate by ear.
         val RUMBLE_TIMINGS = longArrayOf(0L, 1_000L, 80L, 1_000L, 80L, 1_200L)
         val RUMBLE_AMPLITUDES = intArrayOf(0, 255, 0, 255, 0, 255)
+
+        /** How long the completed order stays on screen before the list comes back. */
+        const val ORDER_SHOWN_MS = 1_200L
 
         /** Two quick taps: "got it". */
         val NUDGE_TIMINGS = longArrayOf(0L, 90L, 70L, 90L)

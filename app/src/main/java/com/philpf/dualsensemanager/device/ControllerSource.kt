@@ -4,6 +4,7 @@ import android.content.IntentSender
 import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.Player
+import com.philpf.dualsensemanager.core.PressOrder
 import kotlinx.coroutines.flow.StateFlow
 
 /** What the screen shows and can do. [ControllerManager] is the real one. */
@@ -55,9 +56,17 @@ interface ControllerSource {
     /** Puts controllers in this order, renumbering them (swapping two swaps their numbers). */
     fun reorder(order: List<String>)
 
-    /** Numbers the controllers 1, 2, 3, ... in [order]; the others follow (see core/PressOrder). */
-    fun numberInOrder(order: List<String>)
+    /**
+     * Putting the connected controllers in order by pressing L2 + R2 (see core/PressOrder): the
+     * order so far, or null when not doing so. Their player lights are off while they wait.
+     */
+    val ordering: StateFlow<PressOrder?>
 
-    /** A short rumble, to tell a controller's holder that something took effect. */
-    fun nudge(controllerId: String)
+    fun startOrdering()
+
+    /** [controllerId] pressed L2 + R2: it takes the next place, and buzzes. */
+    fun joinOrder(controllerId: String)
+
+    /** Stops putting controllers in order; those still waiting get no number. */
+    fun stopOrdering()
 }

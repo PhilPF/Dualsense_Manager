@@ -50,7 +50,7 @@ import com.philpf.dualsensemanager.ui.theme.LocalGlass
 
 /** Every cell has this height, whatever it shows. */
 val CellHeight = 118.dp
-private val CellShape = RoundedCornerShape(30.dp)
+internal val CellShape = RoundedCornerShape(30.dp)
 private val ArtWidth = 112.dp
 private val ArtStart = 12.dp
 

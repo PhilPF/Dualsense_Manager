@@ -1,21 +1,18 @@
 package com.philpf.dualsensemanager.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,207 +22,232 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ColorMath
-import com.philpf.dualsensemanager.core.ControllerRow
+import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.Hsv
 import com.philpf.dualsensemanager.core.LedPalette
+import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.RelativeTime
-import com.philpf.dualsensemanager.device.ControllerManager
+import com.philpf.dualsensemanager.device.ControllerSource
+import com.philpf.dualsensemanager.ui.art.BinIcon
+import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.ControllerArt
-import com.philpf.dualsensemanager.ui.glass.Backdrop
+import com.philpf.dualsensemanager.ui.art.FindIcon
+import com.philpf.dualsensemanager.ui.art.PlusIcon
 import com.philpf.dualsensemanager.ui.glass.GlassButton
+import com.philpf.dualsensemanager.ui.glass.GlassChip
+import com.philpf.dualsensemanager.ui.glass.GlassIconButton
 import com.philpf.dualsensemanager.ui.glass.GlassSlider
-import com.philpf.dualsensemanager.ui.glass.GlassSurface
 import com.philpf.dualsensemanager.ui.glass.GlassTextField
 import com.philpf.dualsensemanager.ui.glass.SectionLabel
 import com.philpf.dualsensemanager.ui.glass.Swatch
-import com.philpf.dualsensemanager.ui.theme.GlassColors
 import com.philpf.dualsensemanager.ui.theme.GlassType
-import com.philpf.dualsensemanager.ui.theme.forDisplay
-import kotlin.math.roundToInt
+import com.philpf.dualsensemanager.ui.theme.LocalGlass
+import com.philpf.dualsensemanager.ui.theme.onGlass
 
-/**
- * Everything about one controller: nickname, light-bar colour (presets plus hue, saturation and
- * brightness sliders that update the real light bar live), battery and connection.
- */
+private const val OPAQUE = 0xFF shl 24
+private const val MAX_NAME = 24
+
+/** One controller: who plays with it and its light colour. */
 @Composable
-fun ControllerSheet(
-    row: ControllerRow,
+fun ColumnScope.ControllerSheetContent(
+    view: ControllerView,
     light: Color,
-    backdrop: Backdrop,
-    manager: ControllerManager,
+    players: List<Player>,
+    source: ControllerSource,
     now: Long,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    val id = row.id
-    val profile = row.profile
-    val live = row.live
+    val glass = LocalGlass.current
+    val live = view.live
+    var justCreated by remember { mutableStateOf<String?>(null) }
 
-    var nickname by remember(id) { mutableStateOf(profile.nickname) }
-    var hsv by remember(id) { mutableStateOf(ColorMath.toHsv(profile.color)) }
-    // Follow colour changes made elsewhere (preset, automatic colour) without disturbing the hue
-    // of the colour being edited (greys have no hue of their own).
-    LaunchedEffect(id, profile.color) {
-        if (ColorMath.toRgb(hsv) != profile.color) hsv = ColorMath.toHsv(profile.color)
+    Box(Modifier.fillMaxWidth()) {
+        ControllerArt(
+            light = light,
+            ink = glass.ink,
+            lit = live?.lightBar == true,
+            modifier = Modifier.align(Alignment.Center).padding(top = 6.dp).width(210.dp),
+        )
+        GlassIconButton(onClick = onClose, label = "Close", size = 36.dp, modifier = Modifier.align(Alignment.TopEnd)) {
+            CloseIcon(glass.textSecondary, Modifier.size(14.dp))
+        }
     }
-    val currentRgb = ColorMath.toRgb(hsv)
-    val accent = light.forDisplay()
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.9f).dp
+    Spacer(Modifier.height(10.dp))
+    Text(view.title, style = GlassType.largeTitle, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    view.subtitle?.let {
+        Text(it, style = GlassType.caption, color = glass.textSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+    }
+    Spacer(Modifier.height(10.dp))
+    if (live != null) {
+        LiveStatus(live, Modifier.align(Alignment.CenterHorizontally))
+        Spacer(Modifier.height(14.dp))
+        GlassButton(
+            text = "Find",
+            onClick = { source.identify(view.id) },
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            icon = { FindIcon(glass.textPrimary, Modifier.size(20.dp)) },
+        )
+    } else {
+        Text(
+            text = RelativeTime.since(now, view.profile.lastSeen),
+            style = GlassType.callout,
+            color = glass.textTertiary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 
-    GlassSurface(
-        backdrop = backdrop,
-        modifier = modifier.fillMaxWidth().heightIn(max = maxHeight),
-        shape = RoundedCornerShape(32.dp),
+    Spacer(Modifier.height(24.dp))
+    SectionLabel("Player")
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(
-            Modifier
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp)
-                .padding(top = 10.dp, bottom = 20.dp),
-        ) {
-            Box(
-                Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .size(width = 38.dp, height = 5.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x40FFFFFF)),
+        GlassChip(text = "None", selected = view.player == null, onClick = { source.assignPlayer(view.id, null) })
+        for (player in players) {
+            GlassChip(
+                text = player.name.ifBlank { "…" },
+                selected = view.player?.id == player.id,
+                onClick = { source.assignPlayer(view.id, player.id) },
+                dot = Color(OPAQUE or player.color),
             )
-            Spacer(Modifier.height(12.dp))
-            ControllerArt(
-                light = light,
-                lit = live?.lightBar == true,
-                modifier = Modifier.align(Alignment.CenterHorizontally).width(220.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = profile.title,
-                style = GlassType.largeTitle,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                text = if (profile.nickname.isBlank()) profile.kind.label else profile.defaultName,
-                style = GlassType.caption,
-                color = GlassColors.TextSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(12.dp))
-            if (live != null) {
-                StatusChips(live, Modifier.align(Alignment.CenterHorizontally))
-            } else {
-                Text(
-                    text = "Not connected · seen ${RelativeTime.since(now, profile.lastSeen)}",
-                    style = GlassType.caption,
-                    color = GlassColors.TextTertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+        }
+        GlassChip(
+            text = "",
+            selected = false,
+            onClick = { justCreated = source.newPlayer(view.id) },
+            leading = { PlusIcon(glass.textPrimary, Modifier.size(16.dp)) },
+        )
+    }
+    view.player?.let { player ->
+        Spacer(Modifier.height(10.dp))
+        PlayerNameRow(player, justCreated == player.id, source)
+    }
 
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("Nickname")
-            GlassTextField(
-                value = nickname,
-                onValueChange = { value ->
-                    nickname = value.take(MAX_NICKNAME)
-                    manager.setNickname(id, nickname.trim())
-                },
-                placeholder = "e.g. Ana, Guest, Player 2",
-            )
+    Spacer(Modifier.height(24.dp))
+    SectionLabel("Colour")
+    ColorEditor(view, source)
 
-            Spacer(Modifier.height(24.dp))
-            SectionLabel("Light bar colour")
-            if (live != null && !live.lightBar) {
-                Text(
-                    text = "This phone doesn't let apps change this controller's light bar, so the colour is only used in the app.",
-                    style = GlassType.caption,
-                    color = GlassColors.TextSecondary,
-                    modifier = Modifier.padding(start = 6.dp, bottom = 10.dp),
-                )
-            }
-            PresetSwatches(currentRgb) { rgb ->
-                hsv = ColorMath.toHsv(rgb)
-                manager.setColor(id, rgb)
-            }
-            Spacer(Modifier.height(10.dp))
-            ColorSliders(
-                hsv = hsv,
-                onChange = {
-                    hsv = it
-                    manager.preview(id, ColorMath.toRgb(it))
-                },
-                onFinished = { manager.setColor(id, ColorMath.toRgb(hsv)) },
-            )
-            Text(
-                text = (LedPalette.nameOf(currentRgb)?.let { "$it · " } ?: "Custom · ") + ColorMath.hex(currentRgb) +
-                    if (profile.customColor) "" else " · automatic",
-                style = GlassType.caption,
-                color = GlassColors.TextTertiary,
-                modifier = Modifier.padding(start = 6.dp, top = 4.dp),
-            )
+    if (live == null) {
+        Spacer(Modifier.height(22.dp))
+        GlassButton(
+            text = "Forget",
+            onClick = {
+                source.forget(view.id)
+                onClose()
+            },
+            textColor = glass.danger,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
 
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (profile.customColor) {
-                    GlassButton("Automatic colour", onClick = { manager.useAutomaticColor(id) }, modifier = Modifier.weight(1f))
-                }
-                GlassButton("Done", onClick = onClose, primary = true, accent = accent, modifier = Modifier.weight(1f))
-            }
-
-            val percent = live?.battery?.percent
-            if (percent != null && BatteryText.range(percent) != null) {
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    text = "The controller reports its battery in 10% steps, so ${BatteryText.level(percent)} " +
-                        "means the charge is somewhere in that range.",
-                    style = GlassType.caption,
-                    color = GlassColors.TextTertiary,
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                )
-            }
-            if (live == null) {
-                Spacer(Modifier.height(12.dp))
-                GlassButton(
-                    text = "Forget this controller",
-                    onClick = {
-                        manager.forget(id)
-                        onClose()
-                    },
-                    textColor = GlassColors.Danger,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                    text = "Frees its number and colour. It gets new ones the next time it connects.",
-                    style = GlassType.caption,
-                    color = GlassColors.TextTertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-            }
+@Composable
+private fun PlayerNameRow(player: Player, justCreated: Boolean, source: ControllerSource) {
+    val glass = LocalGlass.current
+    var field by remember(player.id) {
+        mutableStateOf(
+            TextFieldValue(
+                text = player.name,
+                selection = if (justCreated) TextRange(0, player.name.length) else TextRange(player.name.length),
+            ),
+        )
+    }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(player.id, justCreated) {
+        if (justCreated) focus.requestFocus()
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        GlassTextField(
+            value = field,
+            onValueChange = { value ->
+                field = value.copy(text = value.text.take(MAX_NAME))
+                source.renamePlayer(player.id, field.text.trim())
+            },
+            placeholder = "Name",
+            modifier = Modifier.weight(1f),
+            focusRequester = focus,
+        )
+        Spacer(Modifier.width(10.dp))
+        GlassIconButton(onClick = { source.deletePlayer(player.id) }, label = "Delete ${player.name}") {
+            BinIcon(glass.danger, Modifier.size(20.dp))
         }
     }
 }
 
-private const val MAX_NICKNAME = 24
-private const val OPAQUE = 0xFF shl 24
-
-/** The palette in two rows, plus the current colour when it is a custom one. */
+/** Preset swatches plus hue, saturation and brightness sliders that update the light bar live. */
 @Composable
-private fun PresetSwatches(selectedRgb: Int, onPick: (Int) -> Unit) {
+private fun ColorEditor(view: ControllerView, source: ControllerSource) {
+    val glass = LocalGlass.current
+    val saved = view.color
+    var hsv by remember(view.id) { mutableStateOf(ColorMath.toHsv(saved)) }
+    // Follow changes made elsewhere (a preset, another player) without disturbing the hue of the
+    // colour being edited (greys have no hue of their own).
+    LaunchedEffect(view.id, saved) {
+        if (ColorMath.toRgb(hsv) != saved) hsv = ColorMath.toHsv(saved)
+    }
+    val current = ColorMath.toRgb(hsv)
+
+    Swatches(current) { rgb ->
+        hsv = ColorMath.toHsv(rgb)
+        source.setColor(view.id, rgb)
+    }
+    Spacer(Modifier.height(6.dp))
+
+    fun color(h: Float, s: Float, v: Float) = Color(OPAQUE or ColorMath.toRgb(Hsv(h, s, v)))
+    val onChange: (Hsv) -> Unit = {
+        hsv = it
+        source.preview(view.id, ColorMath.toRgb(it))
+    }
+    val onFinished = { source.setColor(view.id, ColorMath.toRgb(hsv)) }
+    GlassSlider(
+        value = hsv.hue / 360f,
+        onValueChange = { onChange(hsv.copy(hue = it * 359.9f)) },
+        onValueChangeFinished = onFinished,
+        track = HueBrush,
+        label = "Hue",
+    )
+    GlassSlider(
+        value = hsv.saturation,
+        onValueChange = { onChange(hsv.copy(saturation = it)) },
+        onValueChangeFinished = onFinished,
+        track = Brush.horizontalGradient(listOf(color(hsv.hue, 0f, hsv.value), color(hsv.hue, 1f, hsv.value))),
+        label = "Saturation",
+    )
+    GlassSlider(
+        value = hsv.value,
+        onValueChange = { onChange(hsv.copy(value = it)) },
+        onValueChangeFinished = onFinished,
+        track = Brush.horizontalGradient(listOf(Color.Black, color(hsv.hue, hsv.saturation, 1f))),
+        label = "Brightness",
+    )
+    if (view.player == null && view.profile.customColor) {
+        Spacer(Modifier.height(10.dp))
+        GlassButton(
+            text = "Automatic",
+            onClick = { source.useAutomaticColor(view.id) },
+            modifier = Modifier.fillMaxWidth(),
+            textColor = Color(OPAQUE or saved).onGlass(glass),
+        )
+    }
+}
+
+/** The palette in rows of five, plus the current colour when it is a custom one. */
+@Composable
+private fun Swatches(selectedRgb: Int, onPick: (Int) -> Unit) {
     val presets = LedPalette.colors.map { it.name to it.rgb }
     val custom = if (LedPalette.nameOf(selectedRgb) == null) listOf("Custom" to selectedRgb) else emptyList()
-    val all = presets + custom
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (chunk in all.chunked(5)) {
+        for (chunk in (presets + custom).chunked(5)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 for (slot in 0 until 5) {
                     val entry = chunk.getOrNull(slot)
@@ -242,44 +264,6 @@ private fun PresetSwatches(selectedRgb: Int, onPick: (Int) -> Unit) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ColorSliders(hsv: Hsv, onChange: (Hsv) -> Unit, onFinished: () -> Unit) {
-    fun color(h: Float, s: Float, v: Float) = Color(OPAQUE or ColorMath.toRgb(Hsv(h, s, v)))
-
-    SliderCaption("Hue", "${hsv.hue.roundToInt()}°")
-    GlassSlider(
-        value = hsv.hue / 360f,
-        onValueChange = { onChange(hsv.copy(hue = it * 359.9f)) },
-        onValueChangeFinished = onFinished,
-        track = HueBrush,
-        label = "Hue",
-    )
-    SliderCaption("Saturation", "${(hsv.saturation * 100).roundToInt()}%")
-    GlassSlider(
-        value = hsv.saturation,
-        onValueChange = { onChange(hsv.copy(saturation = it)) },
-        onValueChangeFinished = onFinished,
-        track = Brush.horizontalGradient(listOf(color(hsv.hue, 0f, hsv.value), color(hsv.hue, 1f, hsv.value))),
-        label = "Saturation",
-    )
-    SliderCaption("Brightness", "${(hsv.value * 100).roundToInt()}%")
-    GlassSlider(
-        value = hsv.value,
-        onValueChange = { onChange(hsv.copy(value = it)) },
-        onValueChangeFinished = onFinished,
-        track = Brush.horizontalGradient(listOf(Color.Black, color(hsv.hue, hsv.saturation, 1f))),
-        label = "Brightness",
-    )
-}
-
-@Composable
-private fun SliderCaption(name: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp).padding(top = 8.dp)) {
-        Text(name, style = GlassType.caption, color = GlassColors.TextSecondary, modifier = Modifier.weight(1f))
-        Text(value, style = GlassType.caption, color = GlassColors.TextTertiary)
     }
 }
 

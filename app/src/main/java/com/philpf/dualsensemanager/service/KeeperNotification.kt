@@ -11,48 +11,50 @@ import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import com.philpf.dualsensemanager.MainActivity
 import com.philpf.dualsensemanager.R
+import com.philpf.dualsensemanager.core.BatteryAlert
+import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
-import com.philpf.dualsensemanager.core.ControllerRow
+import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.Transport
+import kotlin.math.abs
 
+private const val OPAQUE = 0xFF shl 24
+
+internal fun openAppIntent(context: Context): PendingIntent = PendingIntent.getActivity(
+    context,
+    0,
+    Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+)
+
+/** The quiet notification of the light service: connected controllers and their batteries. */
 object KeeperNotification {
     const val ID = 1
     private const val CHANNEL_ID = "connected_controllers"
-    private const val OPAQUE = 0xFF shl 24
 
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Connected controllers",
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = "Keeps light-bar colours on while controllers are connected and shows their battery."
+        val channel = NotificationChannel(CHANNEL_ID, "Connected controllers", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Keeps light colours on while controllers are connected and shows their battery."
             setShowBadge(false)
         }
         manager.createNotificationChannel(channel)
     }
 
-    fun build(context: Context, rows: List<ControllerRow>): Notification {
-        val open = PendingIntent.getActivity(
-            context,
-            0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-        val title = when (rows.size) {
-            0 -> "Waiting for controllers"
-            1 -> "1 controller connected"
-            else -> "${rows.size} controllers connected"
+    fun build(context: Context, views: List<ControllerView>): Notification {
+        val title = when (views.size) {
+            0 -> "No controllers"
+            1 -> "1 controller"
+            else -> "${views.size} controllers"
         }
-        val lines = rows.map(::line)
+        val lines = views.map(::line)
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_controller)
             .setContentTitle(title)
             .setContentText(lines.joinTo(SpannableStringBuilder(), "    "))
-            .setContentIntent(open)
+            .setContentIntent(openAppIntent(context))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -63,20 +65,58 @@ object KeeperNotification {
             lines.forEach { style.addLine(it) }
             builder.setStyle(style)
         }
-        rows.firstOrNull()?.let { builder.setColor(OPAQUE or it.profile.color) }
+        views.firstOrNull()?.let { builder.setColor(OPAQUE or it.color) }
         return builder.build()
     }
 
     /** "● Ana  50–60% ⚡ · USB" with the dot in the controller's colour. */
-    private fun line(row: ControllerRow): CharSequence {
+    private fun line(view: ControllerView): CharSequence {
         val text = SpannableStringBuilder()
-        text.append("●", ForegroundColorSpan(OPAQUE or row.profile.color), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        text.append(' ').append(row.profile.title)
-        val battery = row.live?.battery
+        text.append("●", ForegroundColorSpan(OPAQUE or view.color), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.append(' ').append(view.title)
+        val battery = view.live?.battery
         val percent = battery?.percent
         if (percent != null) text.append("  ").append(BatteryText.level(percent))
         if (battery?.status == ChargeStatus.CHARGING) text.append(" ⚡")
-        if (row.live?.transport == Transport.USB) text.append(" · USB")
+        if (view.live?.transport == Transport.USB) text.append(" · USB")
         return text
     }
+}
+
+/** Low, very low and fully charged battery notifications. */
+object BatteryAlertNotification {
+    private const val CHANNEL_ID = "battery_alerts"
+
+    fun ensureChannel(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        val channel = NotificationChannel(CHANNEL_ID, "Battery alerts", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Low battery and fully charged controllers."
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    fun show(context: Context, view: ControllerView, alert: BatteryAlert, reading: BatteryReading) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return
+        ensureChannel(context)
+        val title = when (alert) {
+            BatteryAlert.LOW -> "${view.title}: battery low"
+            BatteryAlert.CRITICAL -> "${view.title}: battery very low"
+            BatteryAlert.FULL -> "${view.title}: fully charged"
+        }
+        val notification = Notification.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_controller)
+            .setContentTitle(title)
+            .setContentText(reading.percent?.let { BatteryText.level(it) } ?: "")
+            .setColor(OPAQUE or view.color)
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .build()
+        // One notification per controller: a newer alert replaces the previous one.
+        manager.notify(ALERT_ID_BASE + abs(view.id.hashCode() % 100_000), notification)
+    }
+
+    private const val ALERT_ID_BASE = 1_000
 }

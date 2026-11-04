@@ -3,21 +3,31 @@ package com.philpf.dualsensemanager.device
 import android.content.Context
 import android.hardware.BatteryState
 import android.hardware.input.InputManager
+import android.hardware.lights.Light
 import android.hardware.lights.LightState
 import android.hardware.lights.LightsManager
 import android.hardware.lights.LightsRequest
 import android.hardware.usb.UsbManager
+import android.os.CombinedVibration
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
+import android.os.VibrationEffect
 import android.util.Log
 import android.view.InputDevice
+import com.philpf.dualsensemanager.core.AlertState
+import com.philpf.dualsensemanager.core.BatteryAlert
+import com.philpf.dualsensemanager.core.BatteryAlerts
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryRules
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerKind
+import com.philpf.dualsensemanager.core.ControllerProfile
 import com.philpf.dualsensemanager.core.LedPalette
 import com.philpf.dualsensemanager.core.LiveController
+import com.philpf.dualsensemanager.core.Player
+import com.philpf.dualsensemanager.core.PlayerLeds
+import com.philpf.dualsensemanager.core.Players
 import com.philpf.dualsensemanager.core.TransportRules
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,12 +35,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /**
- * Watches for DualSense controllers, sets their light bars and reads their batteries.
+ * Watches for DualSense controllers, sets their lights and reads their batteries.
  *
- * Light bars are set through Android's per-device [LightsManager] (Android 12+). A light
- * session stays open for as long as the controller is connected, because Android turns the
- * light off when the session closes, including when this app's process dies. That is why
- * the app keeps a small foreground service running while controllers are connected.
+ * Lights are set through Android's per-device [LightsManager] (Android 12+): the light bar is
+ * an RGB light, and the five player LEDs show up as five separate lights named "...player-1"
+ * to "...player-5". A light session stays open for as long as the controller is connected,
+ * because Android turns the lights off when the session closes, including when this app's
+ * process dies. That is why the app keeps a small foreground service running while
+ * controllers are connected.
  *
  * All device work happens on one background thread; results are published as [StateFlow]s.
  */
@@ -39,7 +51,10 @@ class ControllerManager(
     private val store: ProfileStore,
     /** Called on the main thread when the first controller connects. */
     private val onFirstControllerConnected: () -> Unit,
-) {
+    /** Called on the main thread when a battery alert should be shown. */
+    private val onBatteryAlert: (controllerId: String, alert: BatteryAlert, reading: BatteryReading) -> Unit,
+) : ControllerSource {
+
     private val inputManager: InputManager = context.getSystemService(InputManager::class.java)
     private val usbManager: UsbManager? = context.getSystemService(UsbManager::class.java)
 
@@ -47,25 +62,26 @@ class ControllerManager(
     private val handler = Handler(thread.looper)
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val _live = MutableStateFlow<List<LiveController>>(emptyList())
+    override val profiles: StateFlow<Map<String, ControllerProfile>> get() = store.profiles
+    override val players: StateFlow<Map<String, Player>> get() = store.players
 
-    /** Controllers connected right now. */
-    val live: StateFlow<List<LiveController>> = _live.asStateFlow()
+    private val _live = MutableStateFlow<List<LiveController>>(emptyList())
+    override val live: StateFlow<List<LiveController>> = _live.asStateFlow()
 
     private val _previews = MutableStateFlow<Map<String, Int>>(emptyMap())
+    override val previews: StateFlow<Map<String, Int>> = _previews.asStateFlow()
 
-    /** Colours being tried out in the colour picker, by controller id. Not saved yet. */
-    val previews: StateFlow<Map<String, Int>> = _previews.asStateFlow()
-
-    /** A connected controller and the light session that holds its colour. */
+    /** A connected controller and the light session that holds its lights. */
     private class Attached(val deviceId: Int, val id: String) {
         var session: LightsManager.LightsSession? = null
-        var shownColor: Int? = null
+        var lightsShown = false
     }
 
     // Only touched on [thread].
     private val attached = HashMap<Int, Attached>()
     private val pendingApply = HashSet<String>()
+    private val blink = HashMap<String, Boolean>()
+    private val alertStates = HashMap<String, AlertState>()
     private var started = false
 
     @Volatile
@@ -100,42 +116,76 @@ class ControllerManager(
         if (visible) handler.post { rescan() }
     }
 
-    /** Shows [rgb] on the controller without saving it, e.g. while a colour slider is dragged. */
-    fun preview(id: String, rgb: Int) {
-        _previews.update { it + (id to (rgb and 0xFFFFFF)) }
-        scheduleApply(id)
+    override fun preview(controllerId: String, rgb: Int) {
+        _previews.update { it + (controllerId to (rgb and 0xFFFFFF)) }
+        scheduleApply(controllerId)
     }
 
-    /** Ends a preview without saving, going back to the saved colour. */
-    fun endPreview(id: String) {
-        _previews.update { it - id }
-        scheduleApply(id)
+    override fun setColor(controllerId: String, rgb: Int) {
+        val profile = store.get(controllerId) ?: return
+        val playerId = profile.playerId
+        if (playerId != null && store.player(playerId) != null) {
+            store.updatePlayer(playerId) { it.copy(color = rgb and 0xFFFFFF) }
+        } else {
+            store.update(controllerId) { it.copy(color = rgb and 0xFFFFFF, customColor = true) }
+        }
+        _previews.update { it - controllerId }
+        scheduleApply(controllerId)
     }
 
-    fun setColor(id: String, rgb: Int) {
-        store.update(id) { it.copy(color = rgb and 0xFFFFFF, customColor = true) }
-        _previews.update { it - id }
-        scheduleApply(id)
+    override fun useAutomaticColor(controllerId: String) {
+        val taken = store.colorsInUse(exceptController = controllerId)
+        store.update(controllerId) { it.copy(color = LedPalette.automaticColor(it.number, taken), customColor = false) }
+        _previews.update { it - controllerId }
+        scheduleApply(controllerId)
     }
 
-    /** Goes back to the automatic colour: the controller's palette slot, or a free colour. */
-    fun useAutomaticColor(id: String) {
-        val others = store.profiles.value.values.filter { it.id != id }.map { it.color }
-        store.update(id) { it.copy(color = LedPalette.automaticColor(it.number, others), customColor = false) }
-        _previews.update { it - id }
-        scheduleApply(id)
+    override fun assignPlayer(controllerId: String, playerId: String?) {
+        store.assignPlayer(controllerId, playerId)
+        applyAll()
     }
 
-    fun setNickname(id: String, nickname: String) {
-        store.update(id) { it.copy(nickname = nickname) }
+    override fun newPlayer(controllerId: String): String? {
+        val profile = store.get(controllerId) ?: return null
+        val name = Players.defaultName(store.players.value.values.map { it.name })
+        val player = store.createPlayer(name, store.colorOf(profile))
+        store.assignPlayer(controllerId, player.id)
+        applyAll()
+        return player.id
     }
 
-    /** Forgets a controller that is not connected; its number and colour become free again. */
-    fun forget(id: String) {
-        if (_live.value.none { it.id == id }) store.forget(id)
+    override fun renamePlayer(playerId: String, name: String) {
+        store.updatePlayer(playerId) { it.copy(name = name) }
+    }
+
+    override fun deletePlayer(playerId: String) {
+        store.deletePlayer(playerId)
+        applyAll()
+    }
+
+    override fun identify(controllerId: String) {
+        handler.post {
+            val targets = attached.values.filter { it.id == controllerId }
+            if (targets.isEmpty()) return@post
+            targets.forEach { vibrate(it.deviceId) }
+            BLINK_STEPS.forEachIndexed { i, on ->
+                handler.postDelayed({
+                    if (on == null) blink.remove(controllerId) else blink[controllerId] = on
+                    attached.values.filter { it.id == controllerId }.forEach(::applyLight)
+                }, i * BLINK_STEP_MS)
+            }
+        }
+    }
+
+    override fun forget(controllerId: String) {
+        if (_live.value.none { it.id == controllerId }) store.forget(controllerId)
     }
 
     // ---- Everything below runs on [thread]. ----
+
+    private fun applyAll() {
+        handler.post { attached.values.forEach(::applyLight) }
+    }
 
     private fun scheduleApply(id: String) {
         handler.post {
@@ -166,6 +216,8 @@ class ControllerManager(
         for (deviceId in attached.keys.filter { it !in present }) {
             val gone = attached.remove(deviceId) ?: continue
             closeSession(gone)
+            alertStates.remove(gone.id)
+            blink.remove(gone.id)
             store.update(gone.id) { it.copy(lastSeen = now) }
         }
 
@@ -181,8 +233,8 @@ class ControllerManager(
                 applyLight(a)
                 followUp(device.id)
                 added = true
-            } else if (existing.shownColor == null) {
-                // The kernel registers the light bar just after the input device; try again.
+            } else if (!existing.lightsShown) {
+                // The kernel registers the lights just after the input device; try again.
                 applyLight(existing)
             }
         }
@@ -190,38 +242,79 @@ class ControllerManager(
         if (wasEmpty && added) mainHandler.post(onFirstControllerConnected)
     }
 
-    /** Re-checks shortly after a connection: the light bar and the first battery report arrive late. */
+    /** Re-checks shortly after a connection: the lights and the first battery report arrive late. */
     private fun followUp(deviceId: Int) {
         for (delayMs in FOLLOW_UP_DELAYS_MS) {
             handler.postDelayed({
                 val a = attached[deviceId] ?: return@postDelayed
-                if (a.shownColor == null) applyLight(a)
+                if (!a.lightsShown) applyLight(a)
                 publish()
             }, delayMs)
         }
     }
 
+    /** Sets the light bar to the controller's colour and the player LEDs to its number. */
     private fun applyLight(a: Attached) {
-        val color = _previews.value[a.id] ?: store.get(a.id)?.color ?: return
+        val profile = store.get(a.id) ?: return
         val device = inputManager.getInputDevice(a.deviceId) ?: return
         val lightsManager = device.lightsManager
-        val bars = rgbLights(lightsManager)
-        if (bars.isEmpty()) return
-        val state = LightState.Builder().setColor(OPAQUE or (color and 0xFFFFFF)).build()
-        val request = LightsRequest.Builder().apply { bars.forEach { addLight(it, state) } }.build()
+        val lights = try {
+            lightsManager.lights
+        } catch (e: RuntimeException) {
+            emptyList()
+        }
+        val blinking = blink[a.id]
+        val color = when (blinking) {
+            false -> 0
+            else -> _previews.value[a.id] ?: store.colorOf(profile)
+        }
+        val playerLeds = when (blinking) {
+            true -> setOf(1, 2, 3, 4, 5)
+            false -> emptySet()
+            null -> PlayerLeds.pattern(profile.number)
+        }
+
+        val request = LightsRequest.Builder()
+        var count = 0
+        for (light in lights) {
+            val state = when {
+                light.hasRgbControl() -> LightState.Builder().setColor(OPAQUE or (color and 0xFFFFFF)).build()
+                light.type == Light.LIGHT_TYPE_PLAYER_ID -> LightState.Builder().setPlayerId(profile.number).build()
+                light.type == Light.LIGHT_TYPE_INPUT -> {
+                    val position = PlayerLeds.position(light.name) ?: continue
+                    LightState.Builder().setColor(if (position in playerLeds) LED_ON else LED_OFF).build()
+                }
+                else -> continue
+            }
+            request.addLight(light, state)
+            count++
+        }
+        if (count == 0) return
         try {
             val session = a.session ?: lightsManager.openSession().also { a.session = it }
-            session.requestLights(request)
-            a.shownColor = color
+            session.requestLights(request.build())
+            a.lightsShown = true
         } catch (e: RuntimeException) {
-            Log.w(TAG, "Could not set the light bar of ${device.name}", e)
+            Log.w(TAG, "Could not set the lights of ${device.name}", e)
         }
     }
 
-    private fun rgbLights(lightsManager: LightsManager) = try {
-        lightsManager.lights.filter { it.hasRgbControl() }
+    private fun vibrate(deviceId: Int) {
+        val device = inputManager.getInputDevice(deviceId) ?: return
+        try {
+            val vibrators = device.vibratorManager
+            if (vibrators.vibratorIds.isEmpty()) return
+            val effect = VibrationEffect.createWaveform(RUMBLE_TIMINGS, RUMBLE_AMPLITUDES, -1)
+            vibrators.vibrate(CombinedVibration.createParallel(effect))
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "Could not rumble ${device.name}", e)
+        }
+    }
+
+    private fun rgbLights(device: InputDevice): Boolean = try {
+        device.lightsManager.lights.any { it.hasRgbControl() }
     } catch (e: RuntimeException) {
-        emptyList()
+        false
     }
 
     private fun closeSession(a: Attached) {
@@ -241,15 +334,22 @@ class ControllerManager(
             val kind = ControllerKind.fromIds(device.vendorId, device.productId) ?: return@mapNotNull null
             val battery = readBattery(device)
             recordSighting(a.id, battery, now)
+            checkAlerts(a.id, battery)
             LiveController(
                 id = a.id,
                 deviceId = a.deviceId,
                 kind = kind,
                 transport = TransportRules.transport(device.name, usbCount),
                 battery = battery,
-                lightBar = a.shownColor != null || rgbLights(device.lightsManager).isNotEmpty(),
+                lightBar = rgbLights(device),
             )
         }
+    }
+
+    private fun checkAlerts(id: String, battery: BatteryReading?) {
+        val (next, alert) = BatteryAlerts.step(alertStates[id] ?: AlertState(), battery)
+        alertStates[id] = next
+        if (alert != null && battery != null) mainHandler.post { onBatteryAlert(id, alert, battery) }
     }
 
     private fun readBattery(device: InputDevice): BatteryReading? {
@@ -287,10 +387,18 @@ class ControllerManager(
     private companion object {
         const val TAG = "ControllerManager"
         const val OPAQUE = 0xFF shl 24
+        const val LED_ON = -1 // 0xFFFFFFFF: full brightness
+        const val LED_OFF = 0
         const val POLL_VISIBLE_MS = 5_000L
         const val POLL_BACKGROUND_MS = 60_000L
         const val APPLY_COALESCE_MS = 16L
         const val SIGHTING_INTERVAL_MS = 5 * 60_000L
+        const val BLINK_STEP_MS = 180L
         val FOLLOW_UP_DELAYS_MS = longArrayOf(700L, 2_000L, 5_000L)
+
+        /** Lights on, off, on, off, on, off, then back to normal (null). */
+        val BLINK_STEPS = listOf(true, false, true, false, true, false, null)
+        val RUMBLE_TIMINGS = longArrayOf(0L, 200L, 140L, 200L, 140L, 200L)
+        val RUMBLE_AMPLITUDES = intArrayOf(0, 255, 0, 255, 0, 255)
     }
 }

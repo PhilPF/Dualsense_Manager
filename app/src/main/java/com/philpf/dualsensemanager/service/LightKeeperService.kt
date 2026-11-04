@@ -10,27 +10,25 @@ import android.os.IBinder
 import android.util.Log
 import com.philpf.dualsensemanager.DualsenseApp
 import com.philpf.dualsensemanager.Permissions
-import com.philpf.dualsensemanager.core.ControllerRow
-import com.philpf.dualsensemanager.core.ControllerRows
+import com.philpf.dualsensemanager.core.ControllerView
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the app's process alive while controllers are connected, so their light-bar colours
- * stay on (Android turns a light off when the app holding it goes away). Its notification
- * lists the connected controllers with their battery levels. Stops itself shortly after the
- * last controller disconnects.
+ * Keeps the app's process alive while controllers are connected, so their lights stay on
+ * (Android turns a light off when the app holding it goes away). Its notification lists the
+ * connected controllers with their battery levels. Stops itself shortly after the last
+ * controller disconnects.
  */
 class LightKeeperService : Service() {
 
     private val scope = MainScope()
     private var stopJob: Job? = null
     private var inForeground = false
-    private var shown: List<ControllerRow>? = null
+    private var shown: List<ControllerView>? = null
 
     private val app: DualsenseApp get() = application as DualsenseApp
 
@@ -39,30 +37,27 @@ class LightKeeperService : Service() {
         running = true
         KeeperNotification.ensureChannel(this)
         scope.launch {
-            combine(app.manager.live, app.store.profiles) { live, profiles ->
-                ControllerRows.build(profiles.values, live).filter { it.isConnected }
-            }.collect { rows ->
-                if (inForeground && rows != shown) {
-                    shown = rows
+            app.connected.collect { views ->
+                if (inForeground && views != shown) {
+                    shown = views
                     getSystemService(NotificationManager::class.java)
-                        .notify(KeeperNotification.ID, KeeperNotification.build(this@LightKeeperService, rows))
+                        .notify(KeeperNotification.ID, KeeperNotification.build(this@LightKeeperService, views))
                 }
-                if (rows.isEmpty()) scheduleStop() else cancelStop()
+                if (views.isEmpty()) scheduleStop() else cancelStop()
             }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val rows = ControllerRows.build(app.store.profiles.value.values, app.manager.live.value)
-            .filter { it.isConnected }
+        val views = app.connected.value
         return try {
             startForeground(
                 KeeperNotification.ID,
-                KeeperNotification.build(this, rows),
+                KeeperNotification.build(this, views),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
             )
             inForeground = true
-            shown = rows
+            shown = views
             START_STICKY
         } catch (e: RuntimeException) {
             // Only reachable after a restart by the system that is not allowed to go foreground.

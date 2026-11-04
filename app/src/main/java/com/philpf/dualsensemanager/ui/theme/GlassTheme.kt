@@ -4,8 +4,11 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -13,29 +16,87 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** Flat "liquid glass" palette: white at different opacities over a dark, colourful backdrop. */
-object GlassColors {
-    val Background = Color(0xFF07080E)
-    val BackgroundTop = Color(0xFF10142A)
-    val TextPrimary = Color(0xF5FFFFFF)
-    val TextSecondary = Color(0xA6FFFFFF)
-    val TextTertiary = Color(0x70FFFFFF)
-    val TextOnLight = Color(0xFF101219)
-    val Hairline = Color(0x1AFFFFFF)
+/** The flat "liquid glass" look in one theme: frosted panels over a colourful backdrop. */
+@Immutable
+data class GlassPalette(
+    val isDark: Boolean,
+    val backgroundTop: Color,
+    val backgroundBottom: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val textTertiary: Color,
+    /** Faint gradient laid over the blur, top to bottom. */
+    val sheenTop: Color,
+    val sheenMiddle: Color,
+    val sheenBottom: Color,
+    /** The thin light rim, from the top-left corner round to the bottom-right. */
+    val rim: List<Color>,
+    /** Hairline that defines panel edges on a light background. */
+    val outline: Color,
+    /** Controls on glass: buttons, chips, text fields. */
+    val controlFill: Color,
+    val controlFillSelected: Color,
+    val track: Color,
+    /** Lines of the controller drawing. */
+    val ink: Color,
+    val accent: Color,
+    val danger: Color,
+    val charging: Color,
+    /** How strongly controllers' light colours glow behind the glass. */
+    val glowAlpha: Float,
+    val scrim: Color,
+)
 
-    /** Fill for controls sitting on a glass panel (buttons, chips, text fields). */
-    val ControlFill = Color(0x1AFFFFFF)
+val DarkGlass = GlassPalette(
+    isDark = true,
+    backgroundTop = Color(0xFF10142A),
+    backgroundBottom = Color(0xFF06070D),
+    textPrimary = Color(0xF5FFFFFF),
+    textSecondary = Color(0xA6FFFFFF),
+    textTertiary = Color(0x70FFFFFF),
+    sheenTop = Color(0x24FFFFFF),
+    sheenMiddle = Color(0x12FFFFFF),
+    sheenBottom = Color(0x0AFFFFFF),
+    rim = listOf(Color(0x4DFFFFFF), Color(0x14FFFFFF), Color(0x0AFFFFFF), Color(0x2EFFFFFF)),
+    outline = Color(0x00000000),
+    controlFill = Color(0x1AFFFFFF),
+    controlFillSelected = Color(0x38FFFFFF),
+    track = Color(0x29FFFFFF),
+    ink = Color(0xB3FFFFFF),
+    accent = Color(0xFF8DB3FF),
+    danger = Color(0xFFFF7A7A),
+    charging = Color(0xFF7CF0A0),
+    glowAlpha = 0.62f,
+    scrim = Color(0x73000000),
+)
 
-    /** Track of sliders and switches. */
-    val Track = Color(0x29FFFFFF)
+val LightGlass = GlassPalette(
+    isDark = false,
+    backgroundTop = Color(0xFFF7F8FC),
+    backgroundBottom = Color(0xFFE3E6F0),
+    textPrimary = Color(0xEB0E1222),
+    textSecondary = Color(0x990E1222),
+    textTertiary = Color(0x6B0E1222),
+    sheenTop = Color(0x99FFFFFF),
+    sheenMiddle = Color(0x7AFFFFFF),
+    sheenBottom = Color(0x6BFFFFFF),
+    rim = listOf(Color(0xF2FFFFFF), Color(0x80FFFFFF), Color(0x4DFFFFFF), Color(0xB3FFFFFF)),
+    outline = Color(0x140E1222),
+    controlFill = Color(0x0F0E1222),
+    controlFillSelected = Color(0xE6FFFFFF),
+    track = Color(0x1F0E1222),
+    ink = Color(0xA60E1222),
+    accent = Color(0xFF2F6BFF),
+    danger = Color(0xFFD93A3A),
+    charging = Color(0xFF1F9D55),
+    glowAlpha = 0.5f,
+    scrim = Color(0x47000000),
+)
 
-    val Accent = Color(0xFF8DB3FF)
-    val Danger = Color(0xFFFF7A7A)
-    val Charging = Color(0xFF7CF0A0)
-}
+val LocalGlass = staticCompositionLocalOf { DarkGlass }
 
 object GlassType {
-    val largeTitle = TextStyle(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+    val largeTitle = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
     val title = TextStyle(fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
     val headline = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
     val body = TextStyle(fontSize = 15.sp, lineHeight = 21.sp)
@@ -45,33 +106,46 @@ object GlassType {
 }
 
 /**
- * A light-bar colour made readable as a UI colour: very dark LED colours (deep blue, dimmed
- * colours) are lifted toward white so buttons and slider fills stay visible on glass.
+ * A light-bar colour made readable as a UI colour on this palette: very dark colours are lifted
+ * toward white on the dark theme, very light ones (white, yellow) pushed toward ink on the light one.
  */
-fun Color.forDisplay(minLuminance: Float = 0.22f): Color {
+fun Color.onGlass(palette: GlassPalette): Color {
     val l = luminance()
-    if (l >= minLuminance) return this
-    val t = ((minLuminance - l) / (1f - l)).coerceIn(0f, 0.75f)
-    return lerp(this, Color.White, t)
+    return if (palette.isDark) {
+        if (l >= 0.22f) this else lerp(this, Color.White, ((0.22f - l) / (1f - l)).coerceIn(0f, 0.75f))
+    } else {
+        if (l <= 0.55f) this else lerp(this, Color(0xFF0E1222), ((l - 0.55f) / l).coerceIn(0f, 0.6f))
+    }
 }
 
 /** Text colour that reads on a solid fill of [background]. */
 fun contentColorOn(background: Color): Color =
-    if (background.luminance() > 0.45f) GlassColors.TextOnLight else Color.White
+    if (background.luminance() > 0.45f) Color(0xFF101219) else Color.White
 
 @Composable
-fun GlassTheme(content: @Composable () -> Unit) {
-    val scheme = darkColorScheme(
-        primary = GlassColors.Accent,
-        onPrimary = GlassColors.TextOnLight,
-        background = GlassColors.Background,
-        onBackground = GlassColors.TextPrimary,
-        surface = GlassColors.Background,
-        onSurface = GlassColors.TextPrimary,
-    )
+fun DualsenseTheme(dark: Boolean, content: @Composable () -> Unit) {
+    val glass = if (dark) DarkGlass else LightGlass
+    val scheme = if (dark) {
+        darkColorScheme(
+            primary = glass.accent,
+            background = glass.backgroundBottom,
+            surface = glass.backgroundBottom,
+            onBackground = glass.textPrimary,
+            onSurface = glass.textPrimary,
+        )
+    } else {
+        lightColorScheme(
+            primary = glass.accent,
+            background = glass.backgroundBottom,
+            surface = glass.backgroundBottom,
+            onBackground = glass.textPrimary,
+            onSurface = glass.textPrimary,
+        )
+    }
     MaterialTheme(colorScheme = scheme) {
         CompositionLocalProvider(
-            LocalContentColor provides GlassColors.TextPrimary,
+            LocalGlass provides glass,
+            LocalContentColor provides glass.textPrimary,
             LocalTextStyle provides GlassType.body,
             content = content,
         )

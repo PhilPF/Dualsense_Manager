@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Dualsense Manager</string>
+    <string name="no_controllers">No controllers</string>
+    <string name="widget_description">Battery of the connected controllers</string>
+    <string name="tile_label">Controllers</string>
 </resources>

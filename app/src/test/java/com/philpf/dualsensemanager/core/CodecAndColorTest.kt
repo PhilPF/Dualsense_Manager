@@ -1,44 +1,58 @@
 package com.philpf.dualsensemanager.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 
 class CodecAndColorTest {
 
-    private fun profile(id: String, number: Int, nickname: String = "", lastSeen: Long = 0L) = ControllerProfile(
+    private fun profile(id: String, number: Int, lastSeen: Long = 0L, playerId: String? = null) = ControllerProfile(
         id = id,
         number = number,
         kind = ControllerKind.DUALSENSE,
-        nickname = nickname,
         color = 0x0030FF,
+        playerId = playerId,
         lastSeen = lastSeen,
     )
 
     @Test
-    fun roundTripKeepsEveryField() {
+    fun profilesRoundTripKeepEveryField() {
         val profiles = listOf(
-            ControllerProfile("a1b2", 1, ControllerKind.DUALSENSE, "Ana", 0x0030FF, false, 1_700_000_000_000L, 55),
-            ControllerProfile("c3d4", 2, ControllerKind.DUALSENSE_EDGE, "", 0xFF0A14, true, 0L, -1),
+            ControllerProfile("a1b2", 1, ControllerKind.DUALSENSE, 0x0030FF, false, "p-1", 1_700_000_000_000L, 55),
+            ControllerProfile("c3d4", 2, ControllerKind.DUALSENSE_EDGE, 0xFF0A14, true, null, 0L, -1),
         )
         assertEquals(profiles, ProfileCodec.decode(ProfileCodec.encode(profiles)))
     }
 
     @Test
-    fun awkwardNicknamesSurvive() {
-        val nick = "tab\there\\back\nslash\r!"
-        val decoded = ProfileCodec.decode(ProfileCodec.encode(listOf(profile("x", 3, nick))))
-        assertEquals(nick, decoded.single().nickname)
+    fun firstReleaseDataKeepsNumbersAndColours() {
+        val v1 = "dsm1\nabc\t2\tDUALSENSE_EDGE\tAna\tff0a14\t1\t123\t55"
+        assertEquals(
+            listOf(ControllerProfile("abc", 2, ControllerKind.DUALSENSE_EDGE, 0xFF0A14, true, null, 123L, 55)),
+            ProfileCodec.decode(v1),
+        )
+    }
+
+    @Test
+    fun playersRoundTripWithAwkwardNames() {
+        val players = listOf(
+            Player("p1", "Ana", 0x00E5FF),
+            Player("p2", "tab\there\\back\nslash\r!", 0xFFFFFF),
+            Player("p3", "", 0),
+        )
+        assertEquals(players, PlayerCodec.decode(PlayerCodec.encode(players)))
     }
 
     @Test
     fun badInputIsSkippedNotFatal() {
         assertTrue(ProfileCodec.decode(null).isEmpty())
         assertTrue(ProfileCodec.decode("").isEmpty())
-        assertTrue(ProfileCodec.decode("something else").isEmpty())
+        assertTrue(ProfileCodec.decode("dsm1\nold\tformat").isEmpty())
+        assertTrue(PlayerCodec.decode("something else").isEmpty())
         val good = ProfileCodec.encode(listOf(profile("ok", 1)))
-        val text = good + "\nbroken line\n\tx\tnot-a-number"
+        val text = good + "\nbroken line\n\tx\tnot-a-number\t0\t0\t\t0\t0"
         assertEquals(listOf("ok"), ProfileCodec.decode(text).map { it.id })
     }
 
@@ -75,18 +89,34 @@ class CodecAndColorTest {
     }
 
     @Test
-    fun rowsPutConnectedFirstByNumberThenMostRecent() {
+    fun viewsPutConnectedFirstByNumberThenMostRecent() {
         val p1 = profile("one", 1, lastSeen = 10)
         val p2 = profile("two", 2, lastSeen = 30)
-        val p3 = profile("three", 3, lastSeen = 20)
+        val p3 = profile("three", 3, lastSeen = 20, playerId = "ana")
         val p4 = profile("four", 4, lastSeen = 50)
         val live = listOf(
             LiveController("three", 7, ControllerKind.DUALSENSE, Transport.USB, null, true),
             LiveController("one", 5, ControllerKind.DUALSENSE, Transport.BLUETOOTH, null, true),
         )
-        val rows = ControllerRows.build(listOf(p1, p2, p3, p4), live)
-        assertEquals(listOf("one", "three", "four", "two"), rows.map { it.id })
-        assertEquals(listOf(true, true, false, false), rows.map { it.isConnected })
+        val ana = Player("ana", "Ana", 0x00E5FF)
+        val views = ControllerViews.build(listOf(p1, p2, p3, p4), mapOf("ana" to ana), live)
+        assertEquals(listOf("one", "three", "four", "two"), views.map { it.id })
+        assertEquals(listOf(true, true, false, false), views.map { it.isConnected })
+
+        val three = views[1]
+        assertEquals("Ana", three.title)
+        assertEquals("DualSense 3", three.subtitle)
+        assertEquals(0x00E5FF, three.color)
+        assertEquals("DualSense 1", views[0].title)
+        assertNull(views[0].subtitle)
+        assertEquals(0x0030FF, views[0].color)
+    }
+
+    @Test
+    fun aMissingPlayerFallsBackToTheController() {
+        val view = ControllerViews.build(listOf(profile("x", 2, playerId = "gone")), emptyMap(), emptyList()).single()
+        assertEquals("DualSense 2", view.title)
+        assertNull(view.player)
     }
 
     @Test

@@ -39,6 +39,13 @@ jobs:
       - name: Rename APK
         run: cp app/build/outputs/apk/debug/app-debug.apk Dualsense-Manager.apk
 
+      - name: Keep the APK for the screenshots job
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: Dualsense-Manager.apk
+          if-no-files-found: error
+
       # Publish the raw .apk on a rolling "debug-build" release, so it downloads and installs
       # straight from a phone browser (workflow artifacts are always zipped).
       - name: Publish to the debug-build release
@@ -57,3 +64,36 @@ jobs:
               --prerelease \
               --target "${{ github.sha }}"
           fi
+
+  # Opens the app with sample controllers on an emulator and adds screenshots to the release.
+  screenshots:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Take screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/screenshots.sh
+
+      - name: Add screenshots to the debug-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload debug-build screenshots/*.png --repo "${{ github.repository }}" --clobber

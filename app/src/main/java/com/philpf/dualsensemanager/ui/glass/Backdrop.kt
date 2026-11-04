@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.philpf.dualsensemanager.ui.theme.LocalGlass
 
 /**
  * Content that glass surfaces can show, blurred, behind themselves.
@@ -36,7 +37,7 @@ import androidx.compose.ui.unit.dp
  * Android has no system glass material, so the content is recorded into a graphics layer
  * ([backdropSource]) and each [GlassSurface] draws that layer again, offset so it lines up
  * with what is really behind the surface, through a blur. The layer is shared, not copied:
- * when the content animates, every glass surface follows without redrawing.
+ * when the content changes, every glass surface follows without redrawing.
  */
 @Stable
 class Backdrop internal constructor(internal val layer: GraphicsLayer) {
@@ -59,22 +60,27 @@ fun Modifier.backdropSource(backdrop: Backdrop): Modifier = this
 
 /**
  * Flat frosted glass: the [backdrop] blurred (with a little extra saturation so colours don't
- * go grey), a faint white gradient, an optional [tint] and a thin light rim. No shadows or
- * bevels. A surface must not be inside the content of the backdrop it shows.
+ * go grey), a faint white gradient, an optional [tint], a thin light rim and, on light
+ * backgrounds, a hairline edge. No shadows or bevels. A surface must not be inside the content
+ * of the backdrop it shows.
  */
 @Composable
 fun GlassSurface(
     backdrop: Backdrop,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
-    tint: Color = Color.Transparent,
+    tint: Brush? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val glass = LocalGlass.current
     val blurLayer = rememberGraphicsLayer()
     val density = LocalDensity.current
     val effect = remember(density) { glassEffect(with(density) { 24.dp.toPx() }) }
     val sheenStopPx = with(density) { 72.dp.toPx() }
+    val rim = remember(glass) {
+        Brush.linearGradient(0f to glass.rim[0], 0.4f to glass.rim[1], 0.65f to glass.rim[2], 1f to glass.rim[3])
+    }
     var position by remember { mutableStateOf(Offset.Zero) }
     Box(
         modifier = modifier
@@ -88,25 +94,18 @@ fun GlassSurface(
                 }
                 drawLayer(blurLayer)
                 val stop = (sheenStopPx / size.height).coerceIn(0.01f, 0.99f)
-                drawRect(Brush.verticalGradient(0f to SheenTop, stop to SheenMiddle, 1f to SheenBottom))
-                if (tint.alpha > 0f) drawRect(tint)
+                drawRect(Brush.verticalGradient(0f to glass.sheenTop, stop to glass.sheenMiddle, 1f to glass.sheenBottom))
+                if (tint != null) drawRect(tint)
             }
-            .border(1.dp, RimBrush, shape)
+            .border(1.5.dp, rim, shape)
+            .then(if (glass.outline.alpha > 0f) Modifier.border(0.75.dp, glass.outline, shape) else Modifier)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         content = content,
     )
 }
 
-private val SheenTop = Color(0x24FFFFFF)
-private val SheenMiddle = Color(0x12FFFFFF)
-private val SheenBottom = Color(0x0AFFFFFF)
-
-private val RimBrush = Brush.linearGradient(
-    0f to Color(0x4DFFFFFF),
-    0.4f to Color(0x14FFFFFF),
-    0.65f to Color(0x0AFFFFFF),
-    1f to Color(0x2EFFFFFF),
-)
+/** A glass fill without the blur, for small controls sitting on a glass panel. */
+val GlassControlShape = RoundedCornerShape(percent = 50)
 
 private fun glassEffect(radiusPx: Float): RenderEffect {
     val saturate = android.graphics.ColorMatrix().apply { setSaturation(1.35f) }
@@ -115,3 +114,5 @@ private fun glassEffect(radiusPx: Float): RenderEffect {
         android.graphics.RenderEffect.createBlurEffect(radiusPx, radiusPx, android.graphics.Shader.TileMode.CLAMP),
     ).asComposeRenderEffect()
 }
+
+internal val Transparent = Color(0x00000000)

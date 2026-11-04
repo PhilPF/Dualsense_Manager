@@ -15,6 +15,9 @@ enum class ControllerKind(val productId: Int, val label: String) {
     }
 }
 
+/** A person who plays: a name and a light-bar colour, assigned to one controller at a time. */
+data class Player(val id: String, val name: String, val color: Int)
+
 /**
  * What the app remembers about one physical controller.
  *
@@ -26,11 +29,12 @@ data class ControllerProfile(
     val id: String,
     val number: Int,
     val kind: ControllerKind,
-    val nickname: String = "",
-    /** Light-bar colour as 0xRRGGBB. */
+    /** The controller's own light-bar colour (0xRRGGBB), used when no player is assigned. */
     val color: Int,
     /** True once the user picked the colour; false while it is the automatic one. */
     val customColor: Boolean = false,
+    /** The player using this controller, if any. */
+    val playerId: String? = null,
     /** Last time the controller was seen connected (epoch ms), 0 if never recorded. */
     val lastSeen: Long = 0L,
     /** Last battery percentage reported while connected, or -1 if none. */
@@ -38,9 +42,6 @@ data class ControllerProfile(
 ) {
     /** "DualSense 2", "DualSense Edge 3", ... */
     val defaultName: String get() = "${kind.label} $number"
-
-    /** The nickname when there is one, otherwise the default name. */
-    val title: String get() = nickname.ifBlank { defaultName }
 }
 
 enum class ChargeStatus { CHARGING, DISCHARGING, FULL, NOT_CHARGING, UNKNOWN }
@@ -61,3 +62,21 @@ data class LiveController(
     /** Whether Android lets apps set this controller's light bar. */
     val lightBar: Boolean,
 )
+
+/** A controller as shown to the user: what is remembered, who plays with it, and its live state. */
+data class ControllerView(val profile: ControllerProfile, val player: Player?, val live: LiveController?) {
+    val id: String get() = profile.id
+
+    /** The player's name when a player is assigned, otherwise "DualSense n". */
+    val title: String get() = player?.name?.trim()?.takeIf { it.isNotEmpty() } ?: profile.defaultName
+
+    /** "DualSense n" under a player's name; nothing otherwise. */
+    val subtitle: String? get() = if (player != null) profile.defaultName else null
+
+    /** The light-bar colour: the player's when one is assigned, otherwise the controller's. */
+    val color: Int get() = player?.color ?: profile.color
+
+    val isConnected: Boolean get() = live != null
+}
+
+enum class ThemeMode { SYSTEM, LIGHT, DARK }

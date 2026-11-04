@@ -6,7 +6,6 @@
     <color name="widget_text">#EB0E1222</color>
     <color name="widget_text_secondary">#990E1222</color>
     <color name="widget_charging">#FF1F9D55</color>
-    <color name="widget_tile">#0F0E1222</color>
     <color name="widget_glow">#5CFFFFFF</color>
     <color name="widget_ripple">#1F000000</color>
     <!-- The controller line art outside the app (widget, notification), as in the app's cells. -->
@@ -14,4 +13,5 @@
     <color name="art_body">#0F0E1222</color>
     <color name="widget_track">#170E1222</color>
     <color name="widget_thumb">#FFFFFFFF</color>
+    <color name="widget_card">#FFF3F4F8</color>
 </resources>

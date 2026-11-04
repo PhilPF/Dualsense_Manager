@@ -207,9 +207,9 @@ private fun ColorWheelPopup(selected: Int, onPreview: (Int) -> Unit, onPick: (In
         }
         Column(
             modifier = Modifier
+                // The window fades in by itself; the card only settles from slightly smaller.
                 .graphicsLayer {
-                    alpha = appear.value.coerceIn(0f, 1f)
-                    val scale = 0.92f + 0.08f * appear.value
+                    val scale = 0.94f + 0.06f * appear.value
                     scaleX = scale
                     scaleY = scale
                 }

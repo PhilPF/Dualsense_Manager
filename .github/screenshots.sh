@@ -40,7 +40,7 @@ shot widget --es theme light --es open widget
 # The colour wheel: the "+" next to white in Ana's controller sheet opens it in a popup.
 open_app --es theme dark --es open demo-1
 adb shell input tap 944 2194
-sleep 2
+sleep 4
 capture wheel-dark
 
 # Editing a player: long-press "Ana" in the same sheet.

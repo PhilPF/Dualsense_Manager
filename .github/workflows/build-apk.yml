@@ -1,0 +1,55 @@
+name: Build APK
+
+# Manual only: run it from the Actions tab ("Build APK" > "Run workflow").
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to update the debug-build release below
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # The default also installs the legacy "tools" package, which Google removed.
+          # Gradle downloads the platform and build tools it needs.
+          packages: platform-tools
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run unit tests and build debug APK
+        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk Dualsense-Manager.apk
+
+      # Publish the raw .apk on a rolling "debug-build" release, so it downloads and installs
+      # straight from a phone browser (workflow artifacts are always zipped).
+      - name: Publish to the debug-build release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="Debug build of \`${{ github.sha }}\` ($(date -u +%Y-%m-%d\ %H:%M) UTC). Download Dualsense-Manager.apk and open it on your phone (allow installs from this source if asked). Requires Android 12 or newer."
+          if gh release view debug-build --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload debug-build Dualsense-Manager.apk --repo "${{ github.repository }}" --clobber
+            gh release edit debug-build --repo "${{ github.repository }}" --notes "$NOTES"
+          else
+            gh release create debug-build Dualsense-Manager.apk \
+              --repo "${{ github.repository }}" \
+              --title "Debug build (latest)" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "${{ github.sha }}"
+          fi

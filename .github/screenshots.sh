@@ -25,8 +25,11 @@ shot() {
 
 shot main-dark --es theme dark
 shot main-light --es theme light
-# Pressing on the first sample (again every 1.4 s): its cell floods with its colour.
-shot pressed-dark --es theme dark --es press CROSS,L1
+# Pressing on the first sample (again every 1.4 s): its cell floods with its colour. A few
+# frames in a row, to catch a wave on its way.
+open_app --es theme dark --es press CROSS,L1
+capture pressed-dark
+for i in 2 3 4 5; do capture "pressed-dark-$i"; done
 shot controller-dark --es theme dark --es open demo-1
 # Its sheet shows the buttons held and where the sticks are.
 shot sticks-dark --es theme dark --es open demo-1 --es press CROSS,R1 --es sticks 0.75,-0.55,-0.3,0.85

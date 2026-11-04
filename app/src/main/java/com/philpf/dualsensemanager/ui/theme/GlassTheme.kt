@@ -90,7 +90,7 @@ val LightGlass = GlassPalette(
     danger = Color(0xFFD93A3A),
     charging = Color(0xFF1F9D55),
     glowAlpha = 0.5f,
-    scrim = Color(0x47000000),
+    scrim = Color(0x2E000000),
 )
 
 val LocalGlass = staticCompositionLocalOf { DarkGlass }

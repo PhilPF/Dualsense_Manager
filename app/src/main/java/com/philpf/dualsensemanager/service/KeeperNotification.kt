@@ -89,7 +89,6 @@ object KeeperNotification {
                 .setStyle(Notification.DecoratedCustomViewStyle())
                 .setCustomContentView(contentView(context, views, big = false))
                 .setCustomBigContentView(contentView(context, views, big = true))
-                .setColor(OPAQUE or views.first().color)
         }
         return builder.build()
     }
@@ -151,7 +150,6 @@ object BatteryAlertNotification {
             .setLargeIcon(Icon.createWithBitmap(controllerBitmap(context, view.color)))
             .setContentTitle(view.title)
             .setContentText(if (level != null) "$what · $level" else what)
-            .setColor(OPAQUE or view.color)
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_STATUS)

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The pill behind a card's dots, like the track of the app's segmented controls. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="6dp" />
+    <solid android:color="@color/widget_track" />
+</shape>

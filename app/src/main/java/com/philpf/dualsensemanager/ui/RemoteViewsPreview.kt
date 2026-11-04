@@ -6,6 +6,7 @@ import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,8 +28,8 @@ import com.philpf.dualsensemanager.service.KeeperNotification
 import com.philpf.dualsensemanager.widget.ControllersWidget
 
 /**
- * Debug builds only: the home-screen widget (a 3 × 2 widget in portrait with the sample
- * controllers, and a wider one with four) and the notification's views, for screenshots.
+ * Debug builds only: the one-cell home-screen widget (with the sample controllers, and with
+ * four, at two common cell sizes) and the notification's views, for screenshots.
  */
 @Composable
 fun RemoteViewsPreview(views: List<ControllerView>) {
@@ -40,8 +41,11 @@ fun RemoteViewsPreview(views: List<ControllerView>) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        WidgetPreview(views, SizeF(203f, 220f))
-        WidgetPreview(views + extraSamples(views), SizeF(285f, 200f))
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            WidgetPreview(views, SizeF(80f, 100f))
+            WidgetPreview(views + extraSamples(views), SizeF(80f, 100f))
+            WidgetPreview(views + extraSamples(views), SizeF(57f, 102f))
+        }
         for (big in listOf(true, false)) {
             AndroidView(
                 factory = { context ->
@@ -52,7 +56,7 @@ fun RemoteViewsPreview(views: List<ControllerView>) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(if (big) 120.dp else 64.dp)
+                    .height(if (big) 150.dp else 64.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(Color(0xFFF2F3F7)),
             )
@@ -63,8 +67,8 @@ fun RemoteViewsPreview(views: List<ControllerView>) {
 @Composable
 private fun WidgetPreview(views: List<ControllerView>, size: SizeF) {
     AndroidView(
-        // A widget's grid only fills inside an AppWidgetHostView, as on a home screen.
-        factory = { context -> AppWidgetHostView(context).apply { updateAppWidget(ControllersWidget.remoteViews(context, views, size)) } },
+        // A widget's stack only fills inside an AppWidgetHostView, as on a home screen.
+        factory = { context -> AppWidgetHostView(context).apply { updateAppWidget(ControllersWidget.remoteViews(context, views)) } },
         modifier = Modifier.size(width = size.width.dp, height = size.height.dp),
     )
 }

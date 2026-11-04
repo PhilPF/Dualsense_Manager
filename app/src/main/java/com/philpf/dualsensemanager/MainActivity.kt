@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val stored by app.settings.theme.collectAsState()
+            val monospace by app.settings.monospace.collectAsState()
             val mode = forcedTheme ?: stored
             val dark = when (mode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -78,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            DualsenseTheme(dark = dark) {
+            DualsenseTheme(dark = dark, monospace = monospace) {
                 if (demo && initiallyOpen == "widget") {
                     val views = ControllerViews.build(source.profiles.value.values, source.players.value, source.live.value)
                     RemoteViewsPreview(views.filter { it.isConnected })
@@ -112,6 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         app.manager.setUiVisible(true)
+        app.uiVisible.value = true
         // Controllers may have connected while the service could not be started.
         if (app.manager.live.value.isNotEmpty()) LightKeeperService.ensureRunning(this)
     }
@@ -123,6 +125,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         app.manager.setUiVisible(false)
+        app.uiVisible.value = false
         super.onStop()
     }
 }

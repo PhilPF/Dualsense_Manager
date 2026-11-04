@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A controller's dot in a card's pill; the thumb shows on the card's own controller. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="9dp"
+    android:layout_height="9dp"
+    android:layout_marginVertical="0.5dp">
+
+    <ImageView
+        android:id="@+id/dot_thumb"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no"
+        android:src="@drawable/widget_dot_thumb"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/dot_color"
+        android:layout_width="5dp"
+        android:layout_height="5dp"
+        android:layout_gravity="center"
+        android:importantForAccessibility="no"
+        android:src="@drawable/widget_dot" />
+</FrameLayout>

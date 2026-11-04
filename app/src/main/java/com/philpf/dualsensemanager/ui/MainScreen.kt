@@ -197,8 +197,7 @@ fun MainScreen(
                     views.filter { it.isConnected }.mapNotNull { v ->
                         val at = glowAt[v.id] ?: return@mapNotNull null
                         val focus = if (shownId == null || v.id == shownId) 1f else othersGlow
-                        val boost = if (pressedOf(v).isNotEmpty()) 1.6f else 1f
-                        GlowSpot(at, lightOf(v), focus * boost)
+                        GlowSpot(at, lightOf(v), focus)
                     }
                 },
                 glass = glass,

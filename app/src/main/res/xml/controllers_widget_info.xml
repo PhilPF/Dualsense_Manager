@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- One cell, not resizable: one controller at a time, swiping down to the next. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_controllers"
-    android:minWidth="180dp"
-    android:minHeight="110dp"
-    android:minResizeWidth="110dp"
-    android:minResizeHeight="100dp"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
     android:previewLayout="@layout/widget_preview"
-    android:resizeMode="horizontal|vertical"
-    android:targetCellWidth="3"
-    android:targetCellHeight="2"
+    android:resizeMode="none"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

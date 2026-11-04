@@ -1,30 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- ControllersWidget sets the grid's columns, tile size and size for the widget's real size. -->
+<!-- The 1 × 1 widget: a stack with a card per connected controller. Swiping down snaps to the
+     next one. ControllersWidget fills it. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="8dp">
+    android:padding="3dp">
 
-    <GridView
-        android:id="@+id/widget_grid"
+    <StackView
+        android:id="@+id/widget_stack"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
-        android:columnWidth="88dp"
-        android:horizontalSpacing="4dp"
-        android:listSelector="@android:color/transparent"
-        android:numColumns="auto_fit"
-        android:stretchMode="columnWidth"
-        android:verticalSpacing="4dp" />
+        android:loopViews="true" />
 
-    <TextView
+    <LinearLayout
         android:id="@+id/widget_empty"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
-        android:text="@string/no_controllers"
-        android:textColor="@color/widget_text_secondary"
-        android:textSize="14sp" />
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:alpha="0.45"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_art_lines_bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="14dp"
+            android:layout_marginTop="4dp"
+            android:autoSizeMaxTextSize="11sp"
+            android:autoSizeMinTextSize="7sp"
+            android:autoSizeTextType="uniform"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="@string/no_controllers"
+            android:textColor="@color/widget_text_secondary" />
+    </LinearLayout>
 </FrameLayout>

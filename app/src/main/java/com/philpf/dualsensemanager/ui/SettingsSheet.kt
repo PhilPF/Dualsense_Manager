@@ -26,10 +26,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.philpf.dualsensemanager.core.AppIconChoice
 import com.philpf.dualsensemanager.core.ThemeMode
 import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.ui.art.CloseIcon
-import com.philpf.dualsensemanager.ui.glass.GlassButton
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
 import com.philpf.dualsensemanager.ui.glass.GlassSwitch
 import com.philpf.dualsensemanager.ui.glass.SectionLabel
@@ -41,7 +41,7 @@ import com.philpf.dualsensemanager.widget.ControllersIcon
 import kotlin.math.roundToInt
 
 /**
- * Theme, battery notifications, and the home-screen icon that takes the colours of the
+ * Theme and font, battery notifications, and whether the app icon takes the colours of the
  * connected controllers ([colors]).
  */
 @Composable
@@ -50,6 +50,8 @@ fun ColumnScope.SettingsSheetContent(settings: SettingsStore, theme: ThemeMode, 
     val context = LocalContext.current
     val lowAlerts by settings.lowBatteryAlerts.collectAsState()
     val fullAlerts by settings.fullBatteryAlerts.collectAsState()
+    val monospace by settings.monospace.collectAsState()
+    val iconFollows by settings.iconFollowsControllers.collectAsState()
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text("Settings", style = GlassType.largeTitle, modifier = Modifier.weight(1f).padding(start = 6.dp))
@@ -64,6 +66,12 @@ fun ColumnScope.SettingsSheetContent(settings: SettingsStore, theme: ThemeMode, 
         options = listOf("System", "Light", "Dark"),
         selectedIndex = theme.ordinal,
         onSelect = { settings.setTheme(ThemeMode.entries[it]) },
+    )
+    Spacer(Modifier.height(10.dp))
+    SegmentedControl(
+        options = listOf("Default font", "Monospaced"),
+        selectedIndex = if (monospace) 1 else 0,
+        onSelect = { settings.setMonospace(it == 1) },
     )
 
     Spacer(Modifier.height(24.dp))
@@ -83,30 +91,28 @@ fun ColumnScope.SettingsSheetContent(settings: SettingsStore, theme: ThemeMode, 
         }
     }
 
-    if (remember { ControllersIcon.canAdd(context) }) {
-        Spacer(Modifier.height(24.dp))
-        SectionLabel("Home screen")
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(glass.controlFill)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // The icon as the home screen shows it: the middle 72 of its 108 dp.
-            val icon = remember(colors) { ControllersIcon.render(context, colors, 216).asImageBitmap() }
-            Canvas(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))) {
-                drawImage(
-                    icon,
-                    srcOffset = IntOffset(36, 36),
-                    srcSize = IntSize(144, 144),
-                    dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                )
-            }
-            Text("Live icon", style = GlassType.body, modifier = Modifier.weight(1f).padding(start = 14.dp))
-            GlassButton(text = "Add", onClick = { ControllersIcon.add(context, colors) })
+    Spacer(Modifier.height(24.dp))
+    SectionLabel("App icon")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(glass.controlFill)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // The icon the launcher shows, as a launcher shows it: the middle 72 of its 108 dp.
+        val key = if (iconFollows) AppIconChoice.key(colors) else AppIconChoice.DEFAULT_KEY
+        val icon = remember(key) { ControllersIcon.render(context, AppIconChoice.colors(key), 216).asImageBitmap() }
+        Canvas(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))) {
+            drawImage(
+                icon,
+                srcOffset = IntOffset(36, 36),
+                srcSize = IntSize(144, 144),
+                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            )
         }
+        Text("Controllers' colours", style = GlassType.body, modifier = Modifier.weight(1f).padding(start = 14.dp))
+        GlassSwitch(checked = iconFollows, onCheckedChange = settings::setIconFollowsControllers, label = "App icon in the controllers' colours")
     }
-
 }

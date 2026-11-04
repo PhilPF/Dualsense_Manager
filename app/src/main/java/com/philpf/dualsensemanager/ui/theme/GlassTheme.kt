@@ -8,11 +8,13 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -99,15 +101,36 @@ val LightGlass = GlassPalette(
 
 val LocalGlass = staticCompositionLocalOf { DarkGlass }
 
+/** Whether text uses the monospaced font (a setting). */
+val LocalMonospace = staticCompositionLocalOf { false }
+
+/** The app's text styles, in the system font or, when chosen, the monospaced one. */
 object GlassType {
-    val largeTitle = TextStyle(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
-    val title = TextStyle(fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
-    val headline = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
-    val body = TextStyle(fontSize = 15.sp, lineHeight = 21.sp)
-    val callout = TextStyle(fontSize = 14.sp, lineHeight = 19.sp)
-    val caption = TextStyle(fontSize = 13.sp, lineHeight = 17.sp)
-    val section = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+    val largeTitle: TextStyle @Composable @ReadOnlyComposable get() = styles().largeTitle
+    val title: TextStyle @Composable @ReadOnlyComposable get() = styles().title
+    val headline: TextStyle @Composable @ReadOnlyComposable get() = styles().headline
+    val body: TextStyle @Composable @ReadOnlyComposable get() = styles().body
+    val callout: TextStyle @Composable @ReadOnlyComposable get() = styles().callout
+    val caption: TextStyle @Composable @ReadOnlyComposable get() = styles().caption
+    val section: TextStyle @Composable @ReadOnlyComposable get() = styles().section
 }
+
+private class TypeScale(family: FontFamily) {
+    val largeTitle = TextStyle(fontFamily = family, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp)
+    val title = TextStyle(fontFamily = family, fontSize = 19.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
+    val headline = TextStyle(fontFamily = family, fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
+    val body = TextStyle(fontFamily = family, fontSize = 15.sp, lineHeight = 21.sp)
+    val callout = TextStyle(fontFamily = family, fontSize = 14.sp, lineHeight = 19.sp)
+    val caption = TextStyle(fontFamily = family, fontSize = 13.sp, lineHeight = 17.sp)
+    val section = TextStyle(fontFamily = family, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+}
+
+private val SystemType = TypeScale(FontFamily.Default)
+private val MonospaceType = TypeScale(FontFamily.Monospace)
+
+@Composable
+@ReadOnlyComposable
+private fun styles(): TypeScale = if (LocalMonospace.current) MonospaceType else SystemType
 
 /**
  * A light-bar colour made readable as a UI colour on this palette: very dark colours are lifted
@@ -127,7 +150,7 @@ fun contentColorOn(background: Color): Color =
     if (background.luminance() > 0.45f) Color(0xFF101219) else Color.White
 
 @Composable
-fun DualsenseTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun DualsenseTheme(dark: Boolean, monospace: Boolean = false, content: @Composable () -> Unit) {
     val glass = if (dark) DarkGlass else LightGlass
     val scheme = if (dark) {
         darkColorScheme(
@@ -147,11 +170,14 @@ fun DualsenseTheme(dark: Boolean, content: @Composable () -> Unit) {
         )
     }
     MaterialTheme(colorScheme = scheme) {
-        CompositionLocalProvider(
-            LocalGlass provides glass,
-            LocalContentColor provides glass.textPrimary,
-            LocalTextStyle provides GlassType.body,
-            content = content,
-        )
+        // The font first, so the default text style below is read in it.
+        CompositionLocalProvider(LocalMonospace provides monospace) {
+            CompositionLocalProvider(
+                LocalGlass provides glass,
+                LocalContentColor provides glass.textPrimary,
+                LocalTextStyle provides GlassType.body,
+                content = content,
+            )
+        }
     }
 }

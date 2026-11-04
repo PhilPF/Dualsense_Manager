@@ -21,12 +21,14 @@ import kotlinx.coroutines.launch
 
 /** How long one wave takes to flood its panel and fade away, in ms. */
 private const val WAVE_MS = 1_000
-private const val MAX_WAVES = 3
+
+/** Every press gets its own full wave; only beyond this many at once do the oldest give way. */
+private const val MAX_WAVES = 32
 
 /** The waves running on one panel; each value goes from 0 to 1. */
 typealias PressWaves = List<Animatable<Float, AnimationVector1D>>
 
-/** Starts a wave each time [presses] grows (not for the count it starts with). */
+/** Starts a wave for each press counted by [presses] (not for the count it starts with). */
 @Composable
 fun rememberPressWaves(presses: Int): PressWaves {
     val waves = remember { mutableStateListOf<Animatable<Float, AnimationVector1D>>() }
@@ -34,7 +36,8 @@ fun rememberPressWaves(presses: Int): PressWaves {
     val scope = rememberCoroutineScope()
     var seen by remember { mutableIntStateOf(presses) }
     LaunchedEffect(presses) {
-        if (presses > seen) {
+        // Presses can arrive faster than frames: one wave for each.
+        repeat((presses - seen).coerceIn(0, MAX_WAVES)) {
             val wave = Animatable(0f)
             waves += wave
             while (waves.size > MAX_WAVES) waves.removeAt(0)
@@ -65,7 +68,9 @@ fun DrawScope.drawPressWaves(waves: PressWaves, origin: Offset, light: Color) {
         // The front reaches the farthest corner at about two thirds of the time, then the
         // flooded panel fades.
         val radius = 1f + reach * 1.05f * FastOutSlowInEasing.transform(t)
-        val strength = 0.62f * (1f - smoothstep(0.35f, 1f, t))
+        // It fades in while still small, so it starts as a wave rather than a bright spot,
+        // and fades out once the panel is flooded.
+        val strength = 0.62f * smoothstep(0f, 0.12f, t) * (1f - smoothstep(0.35f, 1f, t))
         if (strength <= 0.001f) continue
         drawCircle(
             brush = Brush.radialGradient(

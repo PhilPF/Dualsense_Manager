@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** App settings: theme and which battery alerts to show. */
+/** App settings: theme, font, which battery alerts to show and the app icon. */
 class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -15,6 +15,16 @@ class SettingsStore(context: Context) {
         ThemeMode.entries.firstOrNull { it.name == prefs.getString(KEY_THEME, null) } ?: ThemeMode.SYSTEM,
     )
     val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
+
+    private val _monospace = MutableStateFlow(prefs.getBoolean(KEY_MONOSPACE, false))
+
+    /** Whether all text uses a monospaced font. */
+    val monospace: StateFlow<Boolean> = _monospace.asStateFlow()
+
+    private val _iconFollowsControllers = MutableStateFlow(prefs.getBoolean(KEY_ICON, false))
+
+    /** Whether the launcher icon takes the connected controllers' colours. */
+    val iconFollowsControllers: StateFlow<Boolean> = _iconFollowsControllers.asStateFlow()
 
     private val _lowBatteryAlerts = MutableStateFlow(prefs.getBoolean(KEY_LOW, true))
     val lowBatteryAlerts: StateFlow<Boolean> = _lowBatteryAlerts.asStateFlow()
@@ -34,6 +44,16 @@ class SettingsStore(context: Context) {
         prefs.edit().putString(KEY_THEME, mode.name).apply()
     }
 
+    fun setMonospace(on: Boolean) {
+        _monospace.value = on
+        prefs.edit().putBoolean(KEY_MONOSPACE, on).apply()
+    }
+
+    fun setIconFollowsControllers(on: Boolean) {
+        _iconFollowsControllers.value = on
+        prefs.edit().putBoolean(KEY_ICON, on).apply()
+    }
+
     fun setLowBatteryAlerts(on: Boolean) {
         _lowBatteryAlerts.value = on
         prefs.edit().putBoolean(KEY_LOW, on).apply()
@@ -46,6 +66,8 @@ class SettingsStore(context: Context) {
 
     private companion object {
         const val KEY_THEME = "theme"
+        const val KEY_MONOSPACE = "monospace"
+        const val KEY_ICON = "icon_follows_controllers"
         const val KEY_LOW = "low_battery_alerts"
         const val KEY_FULL = "full_battery_alerts"
         const val KEY_ASKED = "asked_for_permissions"

@@ -6,9 +6,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.Bundle
-import android.util.SizeF
-import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import com.philpf.dualsensemanager.DualsenseApp
@@ -17,94 +14,46 @@ import com.philpf.dualsensemanager.R
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
 import com.philpf.dualsensemanager.core.ControllerView
-import com.philpf.dualsensemanager.core.Transport
-import com.philpf.dualsensemanager.core.WidgetGrid
 import com.philpf.dualsensemanager.service.openAppIntent
 
 /**
- * Home-screen widget: a square tile per connected controller, drawn as in the app (lines over a
- * glow of its light colour) with the name and battery underneath. Tiles are as large as the widget allows while showing
- * every controller; when there are too many, the grid scrolls.
+ * Home-screen widget, one cell: a stack with a card per connected controller, drawn as in the
+ * app (lines over a glow of its light colour) with its name and battery. Swiping down snaps to
+ * the next controller. Each card has a pill on its side with a dot per connected controller,
+ * the thumb on its own, so the pill stays in place while the thumb moves from card to card.
+ * (A widget is not told which card is showing, so the pill cannot live outside the cards.)
  */
 class ControllersWidget : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val views = (context.applicationContext as DualsenseApp).connected.value
-        for (id in appWidgetIds) appWidgetManager.updateAppWidget(id, forWidget(context, appWidgetManager, id, views))
-    }
-
-    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
-        val views = (context.applicationContext as DualsenseApp).connected.value
-        appWidgetManager.updateAppWidget(appWidgetId, forWidget(context, appWidgetManager, appWidgetId, views))
+        appWidgetManager.updateAppWidget(appWidgetIds, remoteViews(context, views))
     }
 
     companion object {
         private const val OPAQUE = 0xFF shl 24
-        private const val DIP = TypedValue.COMPLEX_UNIT_DIP
 
-        /** The padding of the widget's root in widget_controllers.xml, in dp. */
-        private const val PADDING = 8f
-
-        /** A 3 × 2 widget in portrait, for when the launcher has not said its size yet. */
-        private val DEFAULT_SIZE = SizeF(203f, 220f)
-
-        /** The most layouts one RemoteViews may hold. */
-        private const val MAX_SIZES = 16
+        /** The most dots a card's pill shows; with more controllers it shows the nearest ones. */
+        private const val MAX_DOTS = 8
 
         /** Redraws every placed widget with [views] (the connected controllers). */
         fun update(context: Context, views: List<ControllerView>) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(ComponentName(context, ControllersWidget::class.java))
-            for (id in ids) manager.updateAppWidget(id, forWidget(context, manager, id, views))
+            if (ids.isEmpty()) return
+            manager.updateAppWidget(ids, remoteViews(context, views))
         }
 
-        /** A layout for each size the widget can have (portrait and landscape); Android picks. */
-        private fun forWidget(context: Context, manager: AppWidgetManager, id: Int, views: List<ControllerView>): RemoteViews {
-            val sizes = sizesOf(manager.getAppWidgetOptions(id))
-            return if (sizes.size == 1) {
-                remoteViews(context, views, sizes.single())
-            } else {
-                RemoteViews(sizes.associateWith { remoteViews(context, views, it) })
-            }
-        }
-
-        @Suppress("DEPRECATION") // the typed getParcelableArrayList needs Android 13
-        private fun sizesOf(options: Bundle?): List<SizeF> {
-            if (options == null) return listOf(DEFAULT_SIZE)
-            val sizes = options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
-                ?.filter { it.width > 0f && it.height > 0f }
-                ?.distinct()
-            if (!sizes.isNullOrEmpty()) return sizes.take(MAX_SIZES)
-            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-            val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-            val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-            if (minWidth <= 0 || maxWidth <= 0 || minHeight <= 0 || maxHeight <= 0) return listOf(DEFAULT_SIZE)
-            // Portrait is the narrow and tall one, landscape the wide and short one.
-            return listOf(
-                SizeF(minWidth.toFloat(), maxHeight.toFloat()),
-                SizeF(maxWidth.toFloat(), minHeight.toFloat()),
-            ).distinct()
-        }
-
-        /** The widget at [size] (in dp) showing [views]. */
-        fun remoteViews(context: Context, views: List<ControllerView>, size: SizeF): RemoteViews {
+        fun remoteViews(context: Context, views: List<ControllerView>): RemoteViews {
             val remote = RemoteViews(context.packageName, R.layout.widget_controllers)
-            val area = SizeF(maxOf(size.width - 2 * PADDING, 1f), maxOf(size.height - 2 * PADDING, 1f))
-            val grid = WidgetGrid.layout(views.size, area.width, area.height)
-            remote.setInt(R.id.widget_grid, "setNumColumns", grid.columns)
-            remote.setIntDimen(R.id.widget_grid, "setColumnWidth", grid.tile, DIP)
-            remote.setViewLayoutWidth(R.id.widget_grid, grid.width, DIP)
-            remote.setViewLayoutHeight(R.id.widget_grid, grid.height, DIP)
-
             val items = RemoteViews.RemoteCollectionItems.Builder()
                 .setHasStableIds(true)
                 .setViewTypeCount(1)
-            for (view in views) items.addItem(view.id.hashCode().toLong(), tile(context, view, grid.tile))
-            remote.setRemoteAdapter(R.id.widget_grid, items.build())
-            remote.setEmptyView(R.id.widget_grid, R.id.widget_empty)
+            for (index in views.indices) items.addItem(views[index].id.hashCode().toLong(), card(context, views, index))
+            remote.setRemoteAdapter(R.id.widget_stack, items.build())
+            remote.setEmptyView(R.id.widget_stack, R.id.widget_empty)
             remote.setPendingIntentTemplate(
-                R.id.widget_grid,
+                R.id.widget_stack,
                 PendingIntent.getActivity(
                     context,
                     1,
@@ -116,26 +65,27 @@ class ControllersWidget : AppWidgetProvider() {
             return remote
         }
 
-        private fun tile(context: Context, view: ControllerView, side: Float): RemoteViews {
-            val tile = RemoteViews(context.packageName, R.layout.widget_tile)
-            val battery = view.live?.battery
+        private fun card(context: Context, views: List<ControllerView>, index: Int): RemoteViews {
+            val view = views[index]
+            val card = RemoteViews(context.packageName, R.layout.widget_card)
             val color = OPAQUE or view.color
-            tile.setViewLayoutHeight(R.id.tile_root, side, DIP)
-            for (id in intArrayOf(R.id.tile_glow, R.id.tile_touchpad, R.id.tile_strips)) tile.setInt(id, "setColorFilter", color)
-            tile.setTextViewText(R.id.tile_name, view.title)
-            tile.setTextViewText(R.id.tile_level, BatteryText.level(battery))
-            // Larger tiles get larger text; the drawing stays the largest part either way.
-            val large = side >= 120f
-            tile.setTextViewTextSize(R.id.tile_name, TypedValue.COMPLEX_UNIT_SP, if (large) 14f else 12f)
-            tile.setTextViewTextSize(R.id.tile_level, TypedValue.COMPLEX_UNIT_SP, if (large) 12f else 11f)
+            for (id in intArrayOf(R.id.card_glow, R.id.card_touchpad, R.id.card_strips)) card.setInt(id, "setColorFilter", color)
+            card.setTextViewText(R.id.card_name, view.title)
+            val battery = view.live?.battery
+            card.setTextViewText(R.id.card_level, BatteryText.level(battery))
             val charging = battery?.status == ChargeStatus.CHARGING || battery?.status == ChargeStatus.FULL
-            tile.setViewVisibility(R.id.tile_bolt, if (charging) View.VISIBLE else View.GONE)
-            tile.setImageViewResource(
-                R.id.tile_transport,
-                if (view.live?.transport == Transport.USB) R.drawable.ic_usb else R.drawable.ic_bluetooth,
-            )
-            tile.setOnClickFillInIntent(R.id.tile_root, Intent())
-            return tile
+            card.setViewVisibility(R.id.card_bolt, if (charging) View.VISIBLE else View.GONE)
+
+            // The pill: a window of at most MAX_DOTS controllers around this one.
+            val first = (index - MAX_DOTS / 2).coerceIn(0, maxOf(0, views.size - MAX_DOTS))
+            for (i in first until minOf(views.size, first + MAX_DOTS)) {
+                val dot = RemoteViews(context.packageName, R.layout.widget_card_dot)
+                dot.setInt(R.id.dot_color, "setColorFilter", OPAQUE or views[i].color)
+                dot.setViewVisibility(R.id.dot_thumb, if (i == index) View.VISIBLE else View.GONE)
+                card.addView(R.id.card_dots, dot)
+            }
+            card.setOnClickFillInIntent(R.id.card_root, Intent())
+            return card
         }
     }
 }

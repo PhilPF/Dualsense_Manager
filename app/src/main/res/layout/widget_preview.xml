@@ -1,160 +1,141 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What the widget picker shows: two sample controllers, as the widget draws them. -->
+<!-- What the widget picker shows: one card as the widget draws it, with two controllers. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
-    android:padding="8dp">
+    android:padding="6dp">
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:orientation="horizontal">
-
-        <FrameLayout
-            android:layout_width="92dp"
-            android:layout_height="92dp"
-            android:background="@drawable/widget_tile_background">
-
-            <ImageView
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_tile_background">
+    
+        <ImageView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:scaleType="fitXY"
+            android:src="@drawable/widget_tile_glow"
+            android:tint="#FF0030FF" />
+    
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="5dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="15dp"
+            android:paddingBottom="5dp">
+    
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:importantForAccessibility="no"
-                android:scaleType="fitXY"
-                android:src="@drawable/widget_tile_glow"
-                android:tint="#FF0030FF" />
-
+                android:layout_height="0dp"
+                android:layout_weight="1">
+    
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_art_touchpad"
+                    android:tint="#FF0030FF" />
+    
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_art_lines_bold" />
+    
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_art_strips"
+                    android:tint="#FF0030FF" />
+            </FrameLayout>
+    
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="15dp"
+                android:layout_marginTop="2dp"
+                android:autoSizeMaxTextSize="12sp"
+                android:autoSizeMinTextSize="7sp"
+                android:autoSizeTextType="uniform"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:text="DualSense 1"
+                android:textColor="@color/widget_text"
+                android:textStyle="bold" />
+    
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center_horizontal"
-                android:orientation="vertical"
-                android:paddingHorizontal="6dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="7dp">
-
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_touchpad"
-                        android:tint="#FF0030FF" />
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_lines" />
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_strips"
-                        android:tint="#FF0030FF" />
-                </FrameLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:ellipsize="end"
-                    android:gravity="center"
-                    android:maxLines="1"
-                    android:text="DualSense 1"
-                    android:textColor="@color/widget_text"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+    
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="80%"
                     android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp" />
+                    android:textSize="10sp" />
+    
+                <ImageView
+                    android:layout_width="9dp"
+                    android:layout_height="9dp"
+                    android:layout_marginStart="2dp"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_bolt"
+                    android:visibility="gone" />
             </LinearLayout>
-        </FrameLayout>
-
-        <FrameLayout
-            android:layout_width="92dp"
-            android:layout_height="92dp"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/widget_tile_background">
-
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:importantForAccessibility="no"
-                android:scaleType="fitXY"
-                android:src="@drawable/widget_tile_glow"
-                android:tint="#FFFF0A14" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center_horizontal"
-                android:orientation="vertical"
-                android:paddingHorizontal="6dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="7dp">
-
-                <FrameLayout
+        </LinearLayout>
+    
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/widget_dots_track"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="1.5dp">
+            <FrameLayout
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:layout_marginVertical="0.5dp">
+    
+                <ImageView
                     android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_touchpad"
-                        android:tint="#FFFF0A14" />
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_lines" />
-
-                    <ImageView
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:importantForAccessibility="no"
-                        android:scaleType="fitCenter"
-                        android:src="@drawable/ic_art_strips"
-                        android:tint="#FFFF0A14" />
-                </FrameLayout>
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="3dp"
-                    android:ellipsize="end"
-                    android:gravity="center"
-                    android:maxLines="1"
-                    android:text="DualSense 2"
-                    android:textColor="@color/widget_text"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="50%"
-                    android:textColor="@color/widget_text_secondary"
-                    android:textSize="11sp" />
-            </LinearLayout>
-        </FrameLayout>
-    </LinearLayout>
+                    android:layout_height="match_parent"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_dot_thumb" />
+    
+                <ImageView
+                    android:layout_width="5dp"
+                    android:layout_height="5dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_dot"
+                    android:tint="#FF0030FF" />
+            </FrameLayout>
+            <FrameLayout
+                android:layout_width="9dp"
+                android:layout_height="9dp"
+                android:layout_marginVertical="0.5dp">
+    
+                <ImageView
+                    android:layout_width="5dp"
+                    android:layout_height="5dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/widget_dot"
+                    android:tint="#FFFF0A14" />
+            </FrameLayout>
+        </LinearLayout>
+    </FrameLayout>
 </FrameLayout>

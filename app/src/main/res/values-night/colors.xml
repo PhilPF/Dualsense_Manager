@@ -12,4 +12,6 @@
     <!-- The controller line art outside the app (widget, notification), as in the app's cells. -->
     <color name="art_ink">#EBFFFFFF</color>
     <color name="art_body">#12FFFFFF</color>
+    <color name="widget_track">#24FFFFFF</color>
+    <color name="widget_thumb">#E6FFFFFF</color>
 </resources>

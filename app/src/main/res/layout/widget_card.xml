@@ -3,10 +3,14 @@
      colour), with its name and battery, and on its left a pill with a dot per connected
      controller: the white thumb sits on this one's. (On the left, the cards behind, which the
      stack shifts right, keep theirs hidden.) ControllersWidget tints and fills it. -->
+<!-- StackView measures cards "at most" its size and spreads smaller ones apart; the large
+     minimum makes every card take the whole size, so the stack only offsets them slightly. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/card_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:minWidth="2000dp"
+    android:minHeight="2000dp"
     android:background="@drawable/widget_card_background">
 
     <ImageView

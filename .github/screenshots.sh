@@ -5,6 +5,11 @@ set -euo pipefail
 PACKAGE=com.philpf.dualsensemanager
 adb install -r Dualsense-Manager.apk
 mkdir -p screenshots
+# The emulator draws on the CPU and its launcher sometimes stalls: no "isn't responding"
+# dialogs over the shots, and a moment for the home screen to settle.
+adb shell settings put global hide_error_dialogs 1
+adb shell input keyevent KEYCODE_HOME
+sleep 10
 
 open_app() {
   adb shell am force-stop "$PACKAGE"

@@ -28,13 +28,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.ColorMath
 import com.philpf.dualsensemanager.core.Hsv
@@ -45,9 +52,33 @@ import com.philpf.dualsensemanager.ui.theme.LocalGlass
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 private const val OPAQUE = 0xFF shl 24
+
+/**
+ * The wheel's colours, worked out pixel by pixel with the same conversion that sets the light
+ * bar: hue is the angle, saturation the distance from the centre (clamped to 1 outside the
+ * circle, so the edge blends cleanly when scaled), brightness full. Drawing it as an image
+ * also avoids the seam a sweep gradient leaves at 0°.
+ */
+private val WheelImage: ImageBitmap by lazy {
+    val n = 256
+    val half = n / 2f
+    val pixels = IntArray(n * n)
+    for (y in 0 until n) {
+        for (x in 0 until n) {
+            val dx = x + 0.5f - half
+            val dy = y + 0.5f - half
+            val hue = Math.toDegrees(atan2(dy, dx).toDouble()).toFloat().mod(360f)
+            val saturation = (sqrt(dx * dx + dy * dy) / half).coerceAtMost(1f)
+            pixels[y * n + x] = OPAQUE or ColorMath.toRgb(Hsv(hue, saturation, 1f))
+        }
+    }
+    android.graphics.Bitmap.createBitmap(pixels, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+}
 
 private val Rainbow = listOf(
     Color(0xFFFF0000),
@@ -158,6 +189,7 @@ fun ColorWheel(
     var hsv by remember(selected) { mutableStateOf(Hsv(start.hue, start.saturation, 1f)) }
     val change by rememberUpdatedState(onChange)
     val finish by rememberUpdatedState(onChangeFinished)
+    val circle = remember { Path() }
     Canvas(
         modifier = modifier
             .size(236.dp)
@@ -192,8 +224,15 @@ fun ColorWheel(
             },
     ) {
         val radius = size.minDimension / 2f
-        drawCircle(Brush.sweepGradient(Rainbow, center), radius = radius)
-        drawCircle(Brush.radialGradient(listOf(Color.White, Color.White.copy(alpha = 0f)), center, radius), radius = radius)
+        circle.reset()
+        circle.addOval(Rect(center, radius))
+        clipPath(circle) {
+            drawImage(
+                WheelImage,
+                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                filterQuality = FilterQuality.High,
+            )
+        }
         drawCircle(glass.textPrimary.copy(alpha = 0.15f), radius = radius, style = Stroke(1.dp.toPx()))
         val angle = Math.toRadians(hsv.hue.toDouble())
         val distance = hsv.saturation * radius

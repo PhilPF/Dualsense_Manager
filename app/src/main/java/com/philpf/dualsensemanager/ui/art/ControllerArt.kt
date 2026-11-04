@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.PathParser
+import kotlin.math.hypot
 import com.philpf.dualsensemanager.core.ControllerPart
+import com.philpf.dualsensemanager.core.Sticks
 
 /*
  * The controller drawing is adapted from design/dualsense.svg of daidr/dualsense-tester
@@ -50,7 +52,8 @@ import com.philpf.dualsensemanager.core.ControllerPart
 /**
  * A DualSense seen from the front, drawn in [ink], with the light strips beside the touchpad
  * glowing in [light]. When [lit] is false the strips show the colour faintly, without the glow.
- * Buttons in [pressed] light up in the controller's colour.
+ * Buttons in [pressed] light up in the controller's colour, and the sticks follow [sticks]
+ * (read while drawing, so moving them only redraws).
  */
 @Composable
 fun ControllerArt(
@@ -59,14 +62,18 @@ fun ControllerArt(
     lit: Boolean,
     modifier: Modifier = Modifier,
     pressed: Set<ControllerPart> = emptySet(),
+    sticks: (() -> Sticks?)? = null,
 ) {
-    Canvas(modifier.aspectRatio(ART_WIDTH / ART_HEIGHT)) {
+    Canvas(modifier.aspectRatio(ControllerArtAspect)) {
         val s = size.width / ART_WIDTH
         scale(s, s, pivot = Offset.Zero) {
-            translate(-ART_LEFT, -ART_TOP) { drawController(light, ink, lit, pressed) }
+            translate(-ART_LEFT, -ART_TOP) { drawController(light, ink, lit, pressed, sticks?.invoke()) }
         }
     }
 }
+
+/** The drawing's width over its height. */
+const val ControllerArtAspect = ART_WIDTH / ART_HEIGHT
 
 /** Where the light bar sits within the drawing, as fractions of its width and height. */
 val LightBarCenter = Offset((559f - ART_LEFT) / ART_WIDTH, (270f - ART_TOP) / ART_HEIGHT)
@@ -421,14 +428,19 @@ private val Strips: List<Path> = listOf(
 
 private val TouchpadArea = Parts.getValue(ControllerPart.TOUCHPAD).area
 private val TouchpadCenter = Offset(559f, 265f)
-private val Sticks = mapOf(
+private val StickCenters = mapOf(
     ControllerPart.LEFT_STICK to Offset(351.764f, 528.548f),
     ControllerPart.RIGHT_STICK to Offset(763.456f, 528.548f),
 )
 private val StickClicks = mapOf(ControllerPart.L3 to ControllerPart.LEFT_STICK, ControllerPart.R3 to ControllerPart.RIGHT_STICK)
 private val TriggerToBumper = mapOf(ControllerPart.L2 to ControllerPart.L1, ControllerPart.R2 to ControllerPart.R1)
 
-private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pressed: Set<ControllerPart>) {
+/** How far a stick's cap moves at full tilt, in drawing units (its well has room for about 30). */
+private const val STICK_TRAVEL = 27f
+private const val STICK_RING = 87.3f
+private const val STICK_CAP = 57.2f
+
+private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pressed: Set<ControllerPart>, sticks: Sticks?) {
     val line = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     val lightUp = pressed.map { TriggerToBumper[it] ?: it }.toSet()
 
@@ -447,6 +459,21 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
             )
         }
     }
+
+    // Each stick: where its cap is, how far it is tilted (0 to 1) and whether it is clicked in.
+    // Without positions, a stick pushed past half way shows fully tilted in place.
+    class Stick(val center: Offset, val cap: Offset, val tilt: Float, val clicked: Boolean)
+    val stickStates = StickCenters.map { (part, center) ->
+        val (x, y) = when {
+            sticks == null -> 0f to 0f
+            part == ControllerPart.LEFT_STICK -> sticks.leftX to sticks.leftY
+            else -> sticks.rightX to sticks.rightY
+        }
+        val tilt = if (sticks == null) (if (part in pressed) 1f else 0f) else hypot(x, y).coerceAtMost(1f)
+        val clicked = StickClicks.entries.any { it.value == part && it.key in pressed }
+        Stick(center, center + Offset(x, y) * STICK_TRAVEL, tilt, clicked)
+    }
+
     // Pressed parts glow under every line: a soft halo, so that even the thin bumpers show at
     // cell size, and a fill.
     for ((part, shape) in Parts) {
@@ -455,13 +482,17 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
         drawPath(shape.area, light.copy(alpha = 0.42f), style = Stroke(30f, join = StrokeJoin.Round))
         drawPath(shape.area, light)
     }
-    for ((part, center) in Sticks) {
-        val clicked = StickClicks.entries.any { it.value == part && it.key in pressed }
-        if (part !in pressed && !clicked) continue
-        val radius = if (clicked) 87.3f else 57.2f
-        drawCircle(light.copy(alpha = 0.22f), radius = radius + 32f, center = center)
-        drawCircle(light.copy(alpha = 0.42f), radius = radius + 15f, center = center)
-        drawCircle(light, radius = radius, center = center)
+    for (stick in stickStates) {
+        if (stick.clicked) {
+            drawCircle(light.copy(alpha = 0.22f), radius = STICK_RING + 32f, center = stick.center)
+            drawCircle(light.copy(alpha = 0.42f), radius = STICK_RING + 15f, center = stick.center)
+            drawCircle(light, radius = STICK_RING, center = stick.center)
+        } else if (stick.tilt > 0f) {
+            // The cap glows more the further it is tilted.
+            drawCircle(light.copy(alpha = 0.22f * stick.tilt), radius = STICK_CAP + 30f, center = stick.cap)
+            drawCircle(light.copy(alpha = 0.42f * stick.tilt), radius = STICK_CAP + 14f, center = stick.cap)
+            drawCircle(light.copy(alpha = 0.35f + 0.65f * stick.tilt), radius = STICK_CAP, center = stick.cap)
+        }
     }
 
     for (path in Lines) drawPath(path, ink, style = line)
@@ -469,12 +500,10 @@ private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pre
         for (path in shape.lines) drawPath(path, ink, style = line)
         for (path in shape.marks) drawPath(path, ink)
     }
-    for ((part, center) in Sticks) {
-        val clicked = StickClicks.entries.any { it.value == part && it.key in pressed }
-        val moved = part in pressed || clicked
-        drawCircle(ink, radius = 87.3f, center = center, style = line)
-        if (!moved) drawCircle(ink.copy(alpha = ink.alpha * 0.14f), radius = 57.2f, center = center)
-        drawCircle(ink, radius = 57.2f, center = center, style = line)
+    for (stick in stickStates) {
+        drawCircle(ink, radius = STICK_RING, center = stick.center, style = line)
+        if (!stick.clicked && stick.tilt == 0f) drawCircle(ink.copy(alpha = ink.alpha * 0.14f), radius = STICK_CAP, center = stick.cap)
+        drawCircle(ink, radius = STICK_CAP, center = stick.cap, style = line)
     }
 
     for (strip in Strips) {

@@ -17,16 +17,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.philpf.dualsensemanager.core.ControllerPart
 import com.philpf.dualsensemanager.core.ControllerViews
+import com.philpf.dualsensemanager.core.Sticks
 import com.philpf.dualsensemanager.core.ThemeMode
+import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
+import com.philpf.dualsensemanager.device.DemoInput
 import com.philpf.dualsensemanager.device.DemoSource
 import com.philpf.dualsensemanager.device.InputHighlights
 import com.philpf.dualsensemanager.service.LightKeeperService
 import com.philpf.dualsensemanager.ui.MainScreen
 import com.philpf.dualsensemanager.ui.RemoteViewsPreview
 import com.philpf.dualsensemanager.ui.theme.DualsenseTheme
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 
 class MainActivity : ComponentActivity() {
 
@@ -39,7 +40,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Debug builds can show sample controllers, for screenshots: --ez demo true
-        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3] [--es press CROSS,L1]
+        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget]
+        // [--es press CROSS,L1] [--es sticks leftX,leftY,rightX,rightY], on the first sample.
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val demo = debuggable && intent.getBooleanExtra("demo", false)
         val source: ControllerSource = if (demo) DemoSource() else app.manager
@@ -49,12 +51,15 @@ class MainActivity : ComponentActivity() {
             null
         }
         val initiallyOpen = if (demo) intent.getStringExtra("open") else null
-        val pressed: StateFlow<Map<Int, Set<ControllerPart>>> = if (demo && intent.hasExtra("press")) {
+        val input: ControllerInput = if (demo && (intent.hasExtra("press") || intent.hasExtra("sticks"))) {
             val parts = intent.getStringExtra("press").orEmpty().split(',')
                 .mapNotNull { name -> ControllerPart.entries.firstOrNull { it.name == name.trim() } }
-            MutableStateFlow(mapOf(DemoSource.FIRST_DEVICE_ID to parts.toSet()))
+            val sticks = intent.getStringExtra("sticks")?.split(',')?.mapNotNull { it.trim().toFloatOrNull() }
+                ?.takeIf { it.size == 4 }
+                ?.let { Sticks(it[0], it[1], it[2], it[3]) }
+            DemoInput(DemoSource.FIRST_DEVICE_ID, parts.toSet(), sticks)
         } else {
-            highlights.pressed
+            highlights
         }
 
         setContent {
@@ -82,7 +87,7 @@ class MainActivity : ComponentActivity() {
                 MainScreen(
                     source = source,
                     settings = app.settings,
-                    pressedFlow = pressed,
+                    input = input,
                     theme = mode,
                     resumeTick = resumeTick,
                     askForPermissions = !demo,

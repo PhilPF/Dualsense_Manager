@@ -22,8 +22,8 @@ import com.philpf.dualsensemanager.core.WidgetGrid
 import com.philpf.dualsensemanager.service.openAppIntent
 
 /**
- * Home-screen widget: a square tile per connected controller, its drawing in its light colour
- * with the name and battery underneath. Tiles are as large as the widget allows while showing
+ * Home-screen widget: a square tile per connected controller, drawn as in the app (lines over a
+ * glow of its light colour) with the name and battery underneath. Tiles are as large as the widget allows while showing
  * every controller; when there are too many, the grid scrolls.
  */
 class ControllersWidget : AppWidgetProvider() {
@@ -121,8 +121,7 @@ class ControllersWidget : AppWidgetProvider() {
             val battery = view.live?.battery
             val color = OPAQUE or view.color
             tile.setViewLayoutHeight(R.id.tile_root, side, DIP)
-            tile.setInt(R.id.tile_glow, "setColorFilter", color)
-            tile.setInt(R.id.tile_body, "setColorFilter", color)
+            for (id in intArrayOf(R.id.tile_glow, R.id.tile_touchpad, R.id.tile_strips)) tile.setInt(id, "setColorFilter", color)
             tile.setTextViewText(R.id.tile_name, view.title)
             tile.setTextViewText(R.id.tile_level, BatteryText.level(battery))
             // Larger tiles get larger text; the drawing stays the largest part either way.

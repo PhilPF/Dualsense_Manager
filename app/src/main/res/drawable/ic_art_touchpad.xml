@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The touchpad catching the strips' light; tinted. Generated. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="146dp"
+    android:height="100dp"
+    android:viewportWidth="1117"
+    android:viewportHeight="764">
+  <group android:translateX="0.000" android:translateY="-128.000" android:scaleX="1.00000" android:scaleY="1.00000">
+    <path android:pathData="M559.079,143.015c0,0 158.534,-0.805 226.555,15.497c12.437,2.981 21.237,14.507 19.467,24.644c-8.942,51.221 -20.354,109.033 -30.53,160.023c-8.029,40.224 -40.893,53.816 -68.431,53.692c-27.538,-0.124 -147.061,-0.559 -147.061,-0.559c0,0 -119.522,0.435 -147.06,0.559c-27.538,0.124 -60.403,-13.468 -68.431,-53.692c-10.177,-50.99 -21.589,-108.802 -30.531,-160.023c-1.77,-10.137 7.031,-21.663 19.467,-24.644c68.021,-16.302 226.555,-15.497 226.555,-15.497Z">
+      <aapt:attr name="android:fillColor"><gradient android:type="radial" android:centerX="559" android:centerY="265" android:gradientRadius="260"><item android:offset="0" android:color="#57FFFFFF" /><item android:offset="1" android:color="#1AFFFFFF" /></gradient></aapt:attr>
+    </path>
+  </group>
+</vector>

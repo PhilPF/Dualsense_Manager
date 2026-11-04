@@ -409,10 +409,11 @@ class ControllerManager(
         const val BLINK_STEP_MS = 230L
         val FOLLOW_UP_DELAYS_MS = longArrayOf(700L, 2_000L, 5_000L)
 
-        /** Lights on, off, ..., then back to normal (null): about two seconds, like the rumble. */
-        val BLINK_STEPS = listOf(true, false, true, false, true, false, true, false, null)
-        // Long pulses: the motors need a moment to spin up, so short ones feel weak.
-        val RUMBLE_TIMINGS = longArrayOf(0L, 450L, 150L, 450L, 150L, 700L)
+        /** Lights on, off, ..., then back to normal (null): as long as the rumble. */
+        val BLINK_STEPS = List(14) { it % 2 == 0 } + null
+        // Both motors at full strength (255 is the most Android allows) for about 3.4 s, with
+        // two short breaks so the buzz pulses and is easier to locate by ear.
+        val RUMBLE_TIMINGS = longArrayOf(0L, 1_000L, 80L, 1_000L, 80L, 1_200L)
         val RUMBLE_AMPLITUDES = intArrayOf(0, 255, 0, 255, 0, 255)
     }
 }

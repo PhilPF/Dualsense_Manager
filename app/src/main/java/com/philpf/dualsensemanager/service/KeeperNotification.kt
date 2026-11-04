@@ -29,17 +29,29 @@ internal fun openAppIntent(context: Context): PendingIntent = PendingIntent.getA
     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
 )
 
-/** The controller drawing in [color], as a bitmap (for a notification's picture). */
-internal fun controllerBitmap(context: Context, color: Int, width: Int = 192, height: Int = 132): Bitmap {
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+/**
+ * A controller as the app draws it, for a notification's picture: its lines over a glow of
+ * [color], with the touchpad and light strips lit in it. Square, [size] pixels a side.
+ */
+internal fun controllerBitmap(context: Context, color: Int, size: Int = 192): Bitmap {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val body = requireNotNull(context.getDrawable(R.drawable.ic_controller_body)).mutate()
-    body.setTint(OPAQUE or color)
-    val details = requireNotNull(context.getDrawable(R.drawable.ic_controller_details))
-    for (drawable in listOf(body, details)) {
-        drawable.setBounds(0, 0, width, height)
+    val tint = OPAQUE or color
+    fun layer(res: Int, tinted: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        val drawable = requireNotNull(context.getDrawable(res)).mutate()
+        if (tinted) drawable.setTint(tint)
+        drawable.setBounds(left, top, right, bottom)
         drawable.draw(canvas)
     }
+    layer(R.drawable.art_glow, true, 0, 0, size, size)
+    // The drawing keeps its proportions (146 by 100), centred with a margin.
+    val width = (size * 0.84f).toInt()
+    val height = width * 100 / 146
+    val left = (size - width) / 2
+    val top = (size - height) / 2
+    layer(R.drawable.ic_art_touchpad, true, left, top, left + width, top + height)
+    layer(R.drawable.ic_art_lines_bold, false, left, top, left + width, top + height)
+    layer(R.drawable.ic_art_strips, true, left, top, left + width, top + height)
     return bitmap
 }
 
@@ -47,7 +59,10 @@ internal fun controllerBitmap(context: Context, color: Int, width: Int = 192, he
 object KeeperNotification {
     const val ID = 1
     private const val CHANNEL_ID = "connected_controllers"
-    private const val SLOTS = 4
+
+    /** How many controllers fit side by side, collapsed and expanded. */
+    private const val SMALL_ROW = 3
+    private const val BIG_ROW = 4
 
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -83,34 +98,27 @@ object KeeperNotification {
     private fun summary(views: List<ControllerView>): String =
         views.joinToString(" · ") { "${it.title} ${BatteryText.level(it.live?.battery)}" }
 
-    /** A row of controllers in their colours with their battery (and names, when expanded). */
+    /**
+     * A row of controllers drawn as in the app, each with its battery, and with its name when
+     * expanded.
+     */
     fun contentView(context: Context, views: List<ControllerView>, big: Boolean): RemoteViews {
         val layout = if (big) R.layout.notification_controllers_big else R.layout.notification_controllers
         val remote = RemoteViews(context.packageName, layout)
-        for (slot in 0 until SLOTS) {
-            val view = views.getOrNull(slot)
-            val item = ids("n_item", slot)
-            if (view == null) {
-                remote.setViewVisibility(item, View.GONE)
-                continue
-            }
-            val battery = view.live?.battery
-            remote.setViewVisibility(item, View.VISIBLE)
-            remote.setInt(ids("n_body", slot), "setColorFilter", OPAQUE or view.color)
-            remote.setTextViewText(ids("n_level", slot), BatteryText.level(battery))
-            val charging = battery?.status == ChargeStatus.CHARGING || battery?.status == ChargeStatus.FULL
-            remote.setViewVisibility(ids("n_bolt", slot), if (charging) View.VISIBLE else View.GONE)
-            if (big) remote.setTextViewText(ids("n_name", slot), view.title)
-        }
+        for (view in views.take(if (big) BIG_ROW else SMALL_ROW)) remote.addView(R.id.n_row, item(context, view, big))
         return remote
     }
 
-    private fun ids(prefix: String, slot: Int): Int = when (prefix) {
-        "n_item" -> intArrayOf(R.id.n_item1, R.id.n_item2, R.id.n_item3, R.id.n_item4)[slot]
-        "n_body" -> intArrayOf(R.id.n_body1, R.id.n_body2, R.id.n_body3, R.id.n_body4)[slot]
-        "n_level" -> intArrayOf(R.id.n_level1, R.id.n_level2, R.id.n_level3, R.id.n_level4)[slot]
-        "n_bolt" -> intArrayOf(R.id.n_bolt1, R.id.n_bolt2, R.id.n_bolt3, R.id.n_bolt4)[slot]
-        else -> intArrayOf(R.id.n_name1, R.id.n_name2, R.id.n_name3, R.id.n_name4)[slot]
+    private fun item(context: Context, view: ControllerView, big: Boolean): RemoteViews {
+        val item = RemoteViews(context.packageName, if (big) R.layout.notification_controller_big else R.layout.notification_controller_small)
+        val color = OPAQUE or view.color
+        for (id in intArrayOf(R.id.n_glow, R.id.n_touchpad, R.id.n_strips)) item.setInt(id, "setColorFilter", color)
+        val battery = view.live?.battery
+        item.setTextViewText(R.id.n_level, BatteryText.level(battery))
+        val charging = battery?.status == ChargeStatus.CHARGING || battery?.status == ChargeStatus.FULL
+        item.setViewVisibility(R.id.n_bolt, if (charging) View.VISIBLE else View.GONE)
+        if (big) item.setTextViewText(R.id.n_name, view.title)
+        return item
     }
 }
 

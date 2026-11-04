@@ -2,22 +2,36 @@ package com.philpf.dualsensemanager.device
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import com.philpf.dualsensemanager.core.ControllerKind
 import com.philpf.dualsensemanager.core.ControllerPart
+import com.philpf.dualsensemanager.core.InputMath
+import com.philpf.dualsensemanager.core.Sticks
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.hypot
 
+/** What the controllers' buttons and sticks are doing, by input-device id. */
+interface ControllerInput {
+    /** Buttons, triggers, d-pad, touchpad and sticks pushed past half way, held right now. */
+    val pressed: StateFlow<Map<Int, Set<ControllerPart>>>
+
+    /** How many times something was newly pressed on each controller, so each press can show. */
+    val presses: StateFlow<Map<Int, Int>>
+
+    /** Where each controller's sticks are. */
+    val sticks: StateFlow<Map<Int, Sticks>>
+}
+
 /**
- * What is being pressed or moved on each DualSense while the app is open, by input-device id,
- * so the screen can light it up and show which controller is which. Fed by the activity with
- * every key and motion event; use on the main thread.
+ * The DualSenses' input while the app is open, fed by the activity with every key and motion
+ * event. Use on the main thread.
  */
-class InputHighlights {
+class InputHighlights : ControllerInput {
 
     private val keys = HashMap<Int, MutableSet<ControllerPart>>()
     private val axes = HashMap<Int, Set<ControllerPart>>()
@@ -28,7 +42,13 @@ class InputHighlights {
     private val tokens = HashMap<Int, Any>()
 
     private val _pressed = MutableStateFlow<Map<Int, Set<ControllerPart>>>(emptyMap())
-    val pressed: StateFlow<Map<Int, Set<ControllerPart>>> = _pressed.asStateFlow()
+    override val pressed: StateFlow<Map<Int, Set<ControllerPart>>> = _pressed.asStateFlow()
+
+    private val _presses = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    override val presses: StateFlow<Map<Int, Int>> = _presses.asStateFlow()
+
+    private val _sticks = MutableStateFlow<Map<Int, Sticks>>(emptyMap())
+    override val sticks: StateFlow<Map<Int, Sticks>> = _sticks.asStateFlow()
 
     /** Returns true when the event came from a DualSense and was used up. */
     fun onKey(event: KeyEvent): Boolean {
@@ -51,6 +71,10 @@ class InputHighlights {
         if (!isDualSense(event.device)) return false
         if (event.isFromSource(InputDevice.SOURCE_JOYSTICK)) {
             axes[event.deviceId] = partsFor(event)
+            val (lx, ly) = InputMath.deadZone(event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y))
+            val (rx, ry) = InputMath.deadZone(event.getAxisValue(MotionEvent.AXIS_Z), event.getAxisValue(MotionEvent.AXIS_RZ))
+            val now = Sticks(lx, ly, rx, ry)
+            if (_sticks.value[event.deviceId] != now) _sticks.value = _sticks.value + (event.deviceId to now)
             publish()
             return true
         }
@@ -70,18 +94,23 @@ class InputHighlights {
         handler.postAtTime({
             touched.remove(id)
             publish()
-        }, token, android.os.SystemClock.uptimeMillis() + TOUCH_LINGER_MS)
+        }, token, SystemClock.uptimeMillis() + TOUCH_LINGER_MS)
     }
 
     private fun publish() {
         val ids = keys.keys + axes.keys + touched
-        _pressed.value = ids.associateWith { id ->
+        val now = ids.associateWith { id ->
             buildSet {
                 keys[id]?.let(::addAll)
                 axes[id]?.let(::addAll)
                 if (id in touched) add(ControllerPart.TOUCHPAD)
             }
         }.filterValues { it.isNotEmpty() }
+        val fresh = InputMath.newlyPressed(_pressed.value, now)
+        if (fresh.isNotEmpty()) {
+            _presses.value = _presses.value.toMutableMap().apply { for (id in fresh) this[id] = (this[id] ?: 0) + 1 }
+        }
+        _pressed.value = now
     }
 
     private fun isDualSense(device: InputDevice?): Boolean =
@@ -126,5 +155,32 @@ class InputHighlights {
         const val STICK_THRESHOLD = 0.5f
         const val TRIGGER_THRESHOLD = 0.3f
         const val TOUCH_LINGER_MS = 350L
+    }
+}
+
+/**
+ * Debug screenshots: [parts] held and [sticks] tilted on one sample controller, pressed again
+ * every [every] ms so the press waves keep running.
+ */
+class DemoInput(deviceId: Int, parts: Set<ControllerPart>, sticks: Sticks?, every: Long = 1_400L) : ControllerInput {
+    override val pressed: StateFlow<Map<Int, Set<ControllerPart>>> = MutableStateFlow(mapOf(deviceId to parts))
+    private val _presses = MutableStateFlow<Map<Int, Int>>(emptyMap())
+    override val presses: StateFlow<Map<Int, Int>> = _presses.asStateFlow()
+    override val sticks: StateFlow<Map<Int, Sticks>> =
+        MutableStateFlow(if (sticks != null) mapOf(deviceId to sticks) else emptyMap())
+
+    init {
+        if (parts.isNotEmpty()) {
+            val handler = Handler(Looper.getMainLooper())
+            var count = 0
+            val tick = object : Runnable {
+                override fun run() {
+                    count++
+                    _presses.value = mapOf(deviceId to count)
+                    handler.postDelayed(this, every)
+                }
+            }
+            handler.postDelayed(tick, 300L)
+        }
     }
 }

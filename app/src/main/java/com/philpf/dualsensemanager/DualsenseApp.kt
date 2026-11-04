@@ -1,6 +1,7 @@
 package com.philpf.dualsensemanager
 
 import android.app.Application
+import android.util.Log
 import com.philpf.dualsensemanager.core.BatteryAlert
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.ControllerView
@@ -11,11 +12,15 @@ import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.service.BatteryAlertNotification
 import com.philpf.dualsensemanager.service.ControllersTileService
 import com.philpf.dualsensemanager.service.LightKeeperService
+import com.philpf.dualsensemanager.widget.ControllersIcon
 import com.philpf.dualsensemanager.widget.ControllersWidget
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -55,6 +60,16 @@ class DualsenseApp : Application() {
             connected.collect { views ->
                 ControllersWidget.update(this@DualsenseApp, views)
                 ControllersTileService.requestUpdate(this@DualsenseApp)
+            }
+        }
+        // The home-screen icon only shows colours, so it is redrawn only when they change.
+        scope.launch(Dispatchers.Default) {
+            connected.map { views -> views.map { it.color } }.distinctUntilChanged().collect { colors ->
+                try {
+                    ControllersIcon.update(this@DualsenseApp, colors)
+                } catch (e: IllegalStateException) {
+                    Log.w("DualsenseApp", "Could not update the icon", e) // e.g. before the phone is first unlocked
+                }
             }
         }
     }

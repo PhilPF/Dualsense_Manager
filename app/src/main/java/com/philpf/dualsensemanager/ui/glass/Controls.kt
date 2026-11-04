@@ -9,8 +9,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,7 +30,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,17 +41,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -131,93 +125,14 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
+/** The size of a colour swatch's touch area, and of the disc inside it. */
+val SwatchSize = 48.dp
+val SwatchDisc = 26.dp
+
 /**
- * Flat slider: a [track] (any brush, e.g. a hue rainbow) with a white capsule thumb.
- * [onValueChange] fires while dragging, [onValueChangeFinished] once the finger lifts.
+ * A light colour as a flat disc with a thin glass rim, like the panels. The selected one
+ * lights up: it glows in its colour inside a thin ring.
  */
-@Composable
-fun GlassSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit,
-    track: Brush,
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    val glass = LocalGlass.current
-    val onChange by rememberUpdatedState(onValueChange)
-    val onFinished by rememberUpdatedState(onValueChangeFinished)
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(38.dp)
-            .semantics {
-                contentDescription = label
-                progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
-                setProgress { target ->
-                    onChange(target.coerceIn(0f, 1f))
-                    onFinished()
-                    true
-                }
-            }
-            .pointerInput(Unit) {
-                val thumbWidth = ThumbWidth.toPx()
-                fun valueAt(x: Float) =
-                    ((x - thumbWidth / 2f) / (size.width - thumbWidth).coerceAtLeast(1f)).coerceIn(0f, 1f)
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    onChange(valueAt(down.position.x))
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) {
-                            change.consume()
-                            break
-                        }
-                        change.consume()
-                        onChange(valueAt(change.position.x))
-                    }
-                    onFinished()
-                }
-            },
-    ) {
-        val thumbW = ThumbWidth.toPx()
-        val thumbH = ThumbHeight.toPx()
-        val trackH = TrackHeight.toPx()
-        val cy = size.height / 2f
-        val trackTopLeft = Offset(0f, cy - trackH / 2f)
-        val trackSize = Size(size.width, trackH)
-        drawRoundRect(brush = track, topLeft = trackTopLeft, size = trackSize, cornerRadius = CornerRadius(trackH / 2f))
-        drawRoundRect(
-            color = glass.outline.takeIf { it.alpha > 0f } ?: Color(0x33FFFFFF),
-            topLeft = trackTopLeft,
-            size = trackSize,
-            cornerRadius = CornerRadius(trackH / 2f),
-            style = Stroke(1.dp.toPx()),
-        )
-        val left = (size.width - thumbW) * value.coerceIn(0f, 1f)
-        val halo = 1.5.dp.toPx()
-        drawRoundRect(
-            color = Color(0x33000000),
-            topLeft = Offset(left - halo, cy - thumbH / 2f - halo),
-            size = Size(thumbW + 2 * halo, thumbH + 2 * halo),
-            cornerRadius = CornerRadius(thumbH / 2f + halo),
-        )
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(left, cy - thumbH / 2f),
-            size = Size(thumbW, thumbH),
-            cornerRadius = CornerRadius(thumbH / 2f),
-        )
-    }
-}
-
-private val ThumbWidth = 32.dp
-private val ThumbHeight = 22.dp
-private val TrackHeight = 10.dp
-
-/** A colour dot; the selected one gets a thin ring. */
 @Composable
 fun Swatch(
     color: Color,
@@ -227,35 +142,48 @@ fun Swatch(
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalGlass.current
-    Box(
+    val lit by animateFloatAsState(if (isSelected) 1f else 0f, tween(220), label = "swatch")
+    Canvas(
         modifier = modifier
-            .size(46.dp)
+            .size(SwatchSize)
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.RadioButton, onClick = onClick)
             .semantics {
                 contentDescription = label
                 selected = isSelected
             },
-        contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(42.dp)) {
-            val outer = size.minDimension / 2f
-            if (isSelected) {
-                drawCircle(glass.textPrimary, radius = outer - 1.dp.toPx(), style = Stroke(1.8.dp.toPx()))
-            }
-            val r = outer - (if (isSelected) 5.5.dp else 4.dp).toPx()
-            drawCircle(color, radius = r)
-            drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(Color.White.copy(alpha = 0.35f), Color.Transparent),
-                    center = center - Offset(r * 0.35f, r * 0.35f),
-                    radius = r,
-                ),
-                radius = r,
-            )
-            drawCircle(glass.outline.takeIf { it.alpha > 0f } ?: Color(0x33FFFFFF), radius = r, style = Stroke(1.dp.toPx()))
-        }
+        drawSelectionGlow(color, lit, glass.textPrimary)
+        val r = SwatchDisc.toPx() / 2f
+        drawCircle(color, radius = r)
+        drawGlassRim(r, glass.isDark)
     }
+}
+
+/** The lit look of a selected swatch: a glow of [color] and a thin ring, faded by [lit]. */
+fun DrawScope.drawSelectionGlow(color: Color, lit: Float, ring: Color) {
+    if (lit <= 0f) return
+    val outer = size.minDimension / 2f
+    drawCircle(
+        Brush.radialGradient(listOf(color.copy(alpha = 0.6f * lit), color.copy(alpha = 0f)), center, outer),
+        radius = outer,
+    )
+    drawCircle(ring.copy(alpha = ring.alpha * lit), radius = SwatchDisc.toPx() / 2f + 5.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+}
+
+/** A disc's glass finish: a faint sheen on its upper half and a thin rim. */
+fun DrawScope.drawGlassRim(radius: Float, dark: Boolean) {
+    drawCircle(
+        Brush.verticalGradient(
+            0f to Color.White.copy(alpha = 0.26f),
+            0.55f to Color.White.copy(alpha = 0f),
+            startY = center.y - radius,
+            endY = center.y + radius,
+        ),
+        radius = radius,
+    )
+    val rim = if (dark) Color.White.copy(alpha = 0.32f) else Color(0xFF0E1222).copy(alpha = 0.14f)
+    drawCircle(rim, radius = radius - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
 }
 
 /** A selectable capsule with an optional colour dot, e.g. a player. */

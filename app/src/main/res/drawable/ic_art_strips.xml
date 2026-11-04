@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The light strips glowing; tinted with the light colour. Generated. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="146dp"
+    android:height="100dp"
+    android:viewportWidth="1117"
+    android:viewportHeight="764">
+  <group android:translateX="0.000" android:translateY="-128.000" android:scaleX="1.00000" android:scaleY="1.00000">
+    <path android:strokeColor="#21FFFFFF" android:strokeWidth="76" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M300,200 C306,240 318,300 330,345 C338,380 368,409 405,411" />
+    <path android:strokeColor="#21FFFFFF" android:strokeWidth="76" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M818.2,200 C812.2,240 800.2,300 788.2,345 C780.2,380 750.2,409 713.2,411" />
+    <path android:strokeColor="#4DFFFFFF" android:strokeWidth="42" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M300,200 C306,240 318,300 330,345 C338,380 368,409 405,411" />
+    <path android:strokeColor="#4DFFFFFF" android:strokeWidth="42" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M818.2,200 C812.2,240 800.2,300 788.2,345 C780.2,380 750.2,409 713.2,411" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="19" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M300,200 C306,240 318,300 330,345 C338,380 368,409 405,411" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="19" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M818.2,200 C812.2,240 800.2,300 788.2,345 C780.2,380 750.2,409 713.2,411" />
+  </group>
+</vector>

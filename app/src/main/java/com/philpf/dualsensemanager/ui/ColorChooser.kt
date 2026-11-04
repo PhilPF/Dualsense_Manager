@@ -1,11 +1,14 @@
 package com.philpf.dualsensemanager.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import android.view.WindowManager
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -15,11 +18,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -27,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -37,17 +46,29 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.philpf.dualsensemanager.core.ColorMath
 import com.philpf.dualsensemanager.core.Hsv
 import com.philpf.dualsensemanager.core.LedPalette
 import com.philpf.dualsensemanager.ui.art.PlusIcon
+import com.philpf.dualsensemanager.ui.glass.GlassButton
 import com.philpf.dualsensemanager.ui.glass.Swatch
+import com.philpf.dualsensemanager.ui.glass.SwatchDisc
+import com.philpf.dualsensemanager.ui.glass.SwatchSize
+import com.philpf.dualsensemanager.ui.glass.drawGlassRim
+import com.philpf.dualsensemanager.ui.glass.drawSelectionGlow
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -80,6 +101,7 @@ private val WheelImage: ImageBitmap by lazy {
     android.graphics.Bitmap.createBitmap(pixels, n, n, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
 }
 
+/** The hue circle drawn on the "+" button, so it reads as "any colour". */
 private val Rainbow = listOf(
     Color(0xFFFF0000),
     Color(0xFFFFFF00),
@@ -91,7 +113,8 @@ private val Rainbow = listOf(
 )
 
 /**
- * The preset colours, and a "+" that opens a colour wheel for any other colour.
+ * The preset colours, and a "+" that opens a colour wheel for any other colour. The "+" always
+ * stays a "+"; while a colour of the wheel is in use, it lights up in that colour.
  * [onPreview] fires while the wheel is dragged, [onPick] when a colour is chosen.
  */
 @Composable
@@ -104,72 +127,126 @@ fun ColorChooser(
     val isCustom = LedPalette.nameOf(selected) == null
     var wheelOpen by remember { mutableStateOf(false) }
     Column(modifier) {
-        val cells = LedPalette.colors.map { it.name to it.rgb }
-        for (row in (cells + listOf("Custom" to selected)).chunked(5)) {
+        val cells: List<Pair<String, Int>?> = LedPalette.colors.map { it.name to it.rgb } + listOf(null)
+        for (row in cells.chunked(5)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                for ((name, rgb) in row) {
-                    if (name == "Custom") {
-                        CustomSwatch(
-                            color = if (isCustom) Color(OPAQUE or selected) else null,
-                            isSelected = isCustom,
-                            open = wheelOpen,
-                            onClick = { wheelOpen = !wheelOpen },
+                for (cell in row) {
+                    if (cell == null) {
+                        AddColorButton(
+                            custom = if (isCustom) Color(OPAQUE or selected) else null,
+                            onClick = { wheelOpen = true },
                         )
                     } else {
-                        Swatch(
-                            color = Color(OPAQUE or rgb),
-                            isSelected = rgb == selected,
-                            label = name,
-                            onClick = {
-                                wheelOpen = false
-                                onPick(rgb)
-                            },
-                        )
+                        val (name, rgb) = cell
+                        Swatch(color = Color(OPAQUE or rgb), isSelected = rgb == selected, label = name, onClick = { onPick(rgb) })
                     }
                 }
             }
         }
-        AnimatedVisibility(
-            visible = wheelOpen,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
-            Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 4.dp), contentAlignment = Alignment.Center) {
-                ColorWheel(selected = selected, onChange = onPreview, onChangeFinished = onPick)
-            }
-        }
+    }
+    if (wheelOpen) {
+        ColorWheelPopup(selected = selected, onPreview = onPreview, onPick = onPick, onDismiss = { wheelOpen = false })
     }
 }
 
-/** The tenth circle: a rainbow ring with a plus, or the custom colour when one is in use. */
+/** The "+": a glass disc with a hue ring. While [custom] is the colour in use, it glows in it. */
 @Composable
-private fun CustomSwatch(color: Color?, isSelected: Boolean, open: Boolean, onClick: () -> Unit) {
+private fun AddColorButton(custom: Color?, onClick: () -> Unit) {
     val glass = LocalGlass.current
+    val lit by animateFloatAsState(if (custom != null) 1f else 0f, tween(220), label = "custom")
     Box(
         modifier = Modifier
-            .size(46.dp)
+            .size(SwatchSize)
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = "Other colour"
-                this.selected = isSelected
+                selected = custom != null
             },
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(42.dp)) {
-            val outer = size.minDimension / 2f
-            if (isSelected || open) {
-                drawCircle(glass.textPrimary, radius = outer - 1.dp.toPx(), style = Stroke(1.8.dp.toPx()))
-            }
-            val r = outer - 5.5.dp.toPx()
-            if (color != null) {
-                drawCircle(color, radius = r)
-            } else {
-                drawCircle(Brush.sweepGradient(Rainbow, center), radius = r)
-                drawCircle(glass.backgroundBottom.copy(alpha = 0.85f), radius = r * 0.62f)
+        Canvas(Modifier.size(SwatchSize)) {
+            custom?.let { drawSelectionGlow(it, lit, glass.textPrimary) }
+            val r = SwatchDisc.toPx() / 2f
+            drawCircle(glass.controlFill, radius = r)
+            drawCircle(Brush.sweepGradient(Rainbow, center), radius = r - 1.25.dp.toPx(), style = Stroke(2.5.dp.toPx()))
+            drawGlassRim(r, glass.isDark)
+        }
+        PlusIcon(glass.textPrimary, Modifier.size(12.dp))
+    }
+}
+
+/**
+ * The colour wheel in a glass card over everything else (blurring it, where the phone allows).
+ * Dragging previews on the light bar; lifting the finger picks the colour.
+ */
+@Composable
+private fun ColorWheelPopup(selected: Int, onPreview: (Int) -> Unit, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val glass = LocalGlass.current
+    val density = LocalDensity.current
+    // The wheel starts from the colour in use when it opened and then follows the finger.
+    val initial = remember { selected }
+    var current by remember { mutableIntStateOf(selected) }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val view = LocalView.current
+        var blurred by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+            window.setDimAmount(if (glass.isDark) 0.35f else 0.2f)
+            if (window.windowManager.isCrossWindowBlurEnabled) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                window.attributes = window.attributes.apply { blurBehindRadius = with(density) { 28.dp.roundToPx() } }
+                blurred = true
             }
         }
-        if (color == null) PlusIcon(glass.textPrimary, Modifier.size(16.dp))
+        val appear = remember { Animatable(0f) }
+        LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow)) }
+        val shape = RoundedCornerShape(34.dp)
+        val rim = remember(glass) {
+            Brush.linearGradient(0f to glass.rim[0], 0.4f to glass.rim[1], 0.65f to glass.rim[2], 1f to glass.rim[3])
+        }
+        Column(
+            modifier = Modifier
+                .graphicsLayer {
+                    alpha = appear.value.coerceIn(0f, 1f)
+                    val scale = 0.92f + 0.08f * appear.value
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .padding(24.dp)
+                .clip(shape)
+                // Without the blur behind it, the card is less see-through so the wheel stays clear.
+                .background(if (blurred) glass.frost else glass.frost.copy(alpha = 0.94f))
+                .drawBehind {
+                    drawRect(Brush.verticalGradient(0f to glass.sheenTop, 0.3f to glass.sheenMiddle, 1f to glass.sheenBottom))
+                }
+                .border(1.5.dp, rim, shape)
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            ColorWheel(
+                selected = initial,
+                onChange = {
+                    current = it
+                    onPreview(it)
+                },
+                onChangeFinished = {
+                    current = it
+                    onPick(it)
+                },
+            )
+            Spacer(Modifier.height(22.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Canvas(Modifier.size(SwatchSize)) {
+                    val color = Color(OPAQUE or current)
+                    drawSelectionGlow(color, 1f, Color.Transparent)
+                    drawCircle(color, radius = SwatchDisc.toPx() / 2f)
+                    drawGlassRim(SwatchDisc.toPx() / 2f, glass.isDark)
+                }
+                Spacer(Modifier.width(18.dp))
+                GlassButton(text = "Done", onClick = onDismiss, modifier = Modifier.width(140.dp))
+            }
+        }
     }
 }
 
@@ -192,7 +269,7 @@ fun ColorWheel(
     val circle = remember { Path() }
     Canvas(
         modifier = modifier
-            .size(236.dp)
+            .size(256.dp)
             .semantics { contentDescription = "Colour wheel" }
             .pointerInput(Unit) {
                 fun at(position: Offset): Hsv {

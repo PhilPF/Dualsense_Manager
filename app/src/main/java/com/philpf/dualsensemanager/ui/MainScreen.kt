@@ -67,6 +67,7 @@ import com.philpf.dualsensemanager.core.ControllerViews
 import com.philpf.dualsensemanager.core.Numbering
 import com.philpf.dualsensemanager.core.Players
 import com.philpf.dualsensemanager.core.ThemeMode
+import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
 import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.service.LightKeeperService
@@ -79,7 +80,6 @@ import com.philpf.dualsensemanager.ui.glass.backdropSource
 import com.philpf.dualsensemanager.ui.glass.rememberBackdrop
 import com.philpf.dualsensemanager.ui.theme.GlassType
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
-import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
 
 private val TopBarHeight = 56.dp
@@ -92,17 +92,18 @@ const val OPEN_SETTINGS = "settings"
 /**
  * The one screen: a cell per controller, each glowing in its light colour, under a floating
  * glass bar; sheets for a controller, a player and settings. Long-press and drag a connected
- * controller to move it: controllers are numbered in this order. Buttons pressed on a
- * controller light up on its drawing.
+ * controller to move it: controllers are numbered in this order. Pressing anything on a
+ * controller floods its cell with its colour; its sheet shows which buttons are pressed and
+ * where the sticks are.
  *
- * [pressed] holds what is pressed on each controller, by input-device id. [resumeTick] changes
- * every time the activity resumes, to re-check permissions.
+ * [input] is what the controllers' buttons and sticks are doing. [resumeTick] changes every
+ * time the activity resumes, to re-check permissions.
  */
 @Composable
 fun MainScreen(
     source: ControllerSource,
     settings: SettingsStore,
-    pressedFlow: StateFlow<Map<Int, Set<ControllerPart>>>,
+    input: ControllerInput,
     theme: ThemeMode,
     resumeTick: Int,
     askForPermissions: Boolean,
@@ -115,7 +116,10 @@ fun MainScreen(
     val players by source.players.collectAsState()
     val live by source.live.collectAsState()
     val previews by source.previews.collectAsState()
-    val pressed by pressedFlow.collectAsState()
+    val pressed by input.pressed.collectAsState()
+    val presses by input.presses.collectAsState()
+    // Read only while drawing the open sheet's controller, so moving a stick only redraws it.
+    val sticks = input.sticks.collectAsState()
     val views = remember(profiles, players, live) { ControllerViews.build(profiles.values, players, live) }
     val sortedPlayers = remember(players) { players.values.sortedBy { it.name.lowercase() } }
     val now = remember(resumeTick, live) { System.currentTimeMillis() }
@@ -226,7 +230,7 @@ fun MainScreen(
                             light = lightOf(view),
                             backdrop = background,
                             now = now,
-                            pressed = pressedOf(view),
+                            presses = view.live?.let { presses[it.deviceId] } ?: 0,
                             onOpen = {
                                 openId = view.id
                                 shownId = view.id
@@ -291,6 +295,7 @@ fun MainScreen(
                     light = lightOf(view),
                     players = sortedPlayers,
                     pressed = pressedOf(view),
+                    sticks = { view.live?.let { sticks.value[it.deviceId] } },
                     source = source,
                     now = now,
                     onEditPlayer = {
@@ -321,7 +326,12 @@ fun MainScreen(
             }
         }
         GlassSheet(visible = settingsOpen, backdrop = content, onDismiss = { settingsOpen = false }) {
-            SettingsSheetContent(settings = settings, theme = theme, onClose = { settingsOpen = false })
+            SettingsSheetContent(
+                settings = settings,
+                theme = theme,
+                colors = views.filter { it.isConnected }.map { it.color },
+                onClose = { settingsOpen = false },
+            )
         }
     }
 }

@@ -25,17 +25,18 @@ shot() {
 
 shot main-dark --es theme dark
 shot main-light --es theme light
-shot pressed-dark --es theme dark --es press CROSS,L1,LEFT_STICK
+# Pressing on the first sample (again every 1.4 s): its cell floods with its colour.
+shot pressed-dark --es theme dark --es press CROSS,L1
 shot controller-dark --es theme dark --es open demo-1
+# Its sheet shows the buttons held and where the sticks are.
+shot sticks-dark --es theme dark --es open demo-1 --es press CROSS,R1 --es sticks 0.75,-0.55,-0.3,0.85
 shot controller-light --es theme light --es open demo-2
 shot settings-light --es theme light --es open settings
 shot widget --es theme light --es open widget
 
-# The colour wheel: the "+" next to white in Ana's controller sheet, then scroll down to it.
+# The colour wheel: the "+" next to white in Ana's controller sheet opens it in a popup.
 open_app --es theme dark --es open demo-1
-adb shell input tap 946 2198
-sleep 2
-adb shell input swipe 540 1000 540 300 600
+adb shell input tap 944 2194
 sleep 2
 capture wheel-dark
 

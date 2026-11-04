@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -26,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.BatteryReading
 import com.philpf.dualsensemanager.core.BatteryText
 import com.philpf.dualsensemanager.core.ChargeStatus
-import com.philpf.dualsensemanager.core.ControllerPart
 import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.LiveController
 import com.philpf.dualsensemanager.core.RelativeTime
@@ -35,6 +35,7 @@ import com.philpf.dualsensemanager.ui.art.BatteryGlyph
 import com.philpf.dualsensemanager.ui.art.BluetoothIcon
 import com.philpf.dualsensemanager.ui.art.BoltIcon
 import com.philpf.dualsensemanager.ui.art.ControllerArt
+import com.philpf.dualsensemanager.ui.art.ControllerArtAspect
 import com.philpf.dualsensemanager.ui.art.FindIcon
 import com.philpf.dualsensemanager.ui.art.LightBarCenter
 import com.philpf.dualsensemanager.ui.art.UsbIcon
@@ -48,11 +49,14 @@ import com.philpf.dualsensemanager.ui.theme.LocalGlass
 val CellHeight = 118.dp
 private val CellShape = RoundedCornerShape(30.dp)
 private val ArtWidth = 112.dp
+private val ArtStart = 12.dp
 
 /**
  * One controller: its drawing lit in its colour, its name (and "DualSense n" under a player's
  * name), battery, charging and connection; a button to make it rumble and blink.
- * [onGlow] reports where its light is, so the background can glow there.
+ * [onGlow] reports where its light is, so the background can glow there. Each time [presses]
+ * grows (something was pressed on the controller), a wave of its colour floods the cell from
+ * the controller outward.
  */
 @Composable
 fun ControllerCell(
@@ -64,10 +68,11 @@ fun ControllerCell(
     onFind: () -> Unit,
     onGlow: (Offset) -> Unit,
     modifier: Modifier = Modifier,
-    pressed: Set<ControllerPart> = emptySet(),
+    presses: Int = 0,
 ) {
     val glass = LocalGlass.current
     val live = view.live
+    val waves = rememberPressWaves(presses)
     val tint = if (live != null) {
         Brush.horizontalGradient(0f to light.copy(alpha = if (glass.isDark) 0.16f else 0.12f), 0.6f to Color.Transparent)
     } else {
@@ -81,14 +86,25 @@ fun ControllerCell(
         onClick = onOpen,
     ) {
         Row(
-            modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 14.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    // From the controller's light bar, below the content and inside the cell.
+                    val artWidth = ArtWidth.toPx()
+                    val artHeight = artWidth / ControllerArtAspect
+                    val origin = Offset(
+                        ArtStart.toPx() + artWidth * LightBarCenter.x,
+                        (size.height - artHeight) / 2f + artHeight * LightBarCenter.y,
+                    )
+                    drawPressWaves(waves, origin, light)
+                }
+                .padding(start = ArtStart, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ControllerArt(
                 light = light,
                 ink = glass.ink,
                 lit = live?.lightBar == true,
-                pressed = pressed,
                 modifier = Modifier
                     .width(ArtWidth)
                     .alpha(if (live != null) 1f else 0.55f)

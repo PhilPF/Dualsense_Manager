@@ -23,6 +23,7 @@ import com.philpf.dualsensemanager.core.ControllerPart
 import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.Player
 import com.philpf.dualsensemanager.core.RelativeTime
+import com.philpf.dualsensemanager.core.Sticks
 import com.philpf.dualsensemanager.device.ControllerSource
 import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.ControllerArt
@@ -40,7 +41,8 @@ private const val OPAQUE = 0xFF shl 24
 
 /**
  * One controller: who plays with it (tap a player to give them this controller, long-press to
- * edit them, + to add one) and its light colour.
+ * edit them, + to add one) and its light colour. Its drawing shows the buttons being pressed
+ * and where the sticks are.
  */
 @Composable
 fun ColumnScope.ControllerSheetContent(
@@ -48,6 +50,7 @@ fun ColumnScope.ControllerSheetContent(
     light: Color,
     players: List<Player>,
     pressed: Set<ControllerPart>,
+    sticks: () -> Sticks?,
     source: ControllerSource,
     now: Long,
     onEditPlayer: (Player) -> Unit,
@@ -63,6 +66,7 @@ fun ColumnScope.ControllerSheetContent(
             ink = glass.ink,
             lit = live?.lightBar == true,
             pressed = pressed,
+            sticks = sticks,
             modifier = Modifier.align(Alignment.Center).padding(top = 6.dp).width(220.dp),
         )
         GlassIconButton(onClick = onClose, label = "Close", size = 36.dp, modifier = Modifier.align(Alignment.TopEnd)) {

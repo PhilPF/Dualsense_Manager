@@ -9,4 +9,7 @@
     <color name="widget_tile">#0F0E1222</color>
     <color name="widget_glow">#5CFFFFFF</color>
     <color name="widget_ripple">#1F000000</color>
+    <!-- The controller line art outside the app (widget, notification), as in the app's cells. -->
+    <color name="art_ink">#E00E1222</color>
+    <color name="art_body">#0F0E1222</color>
 </resources>

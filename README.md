@@ -13,8 +13,8 @@ lights and read its battery).
 - **Light-bar colours.** A controller seen for the first time gets the next free colour
   automatically: DualSense 1 blue, 2 red, 3 green, 4 pink (the PS5's own player colours),
   then orange, cyan, purple, yellow and white, skipping colours already in use. Pick any
-  colour from the presets, or tap "+" for a colour wheel; the real light bar follows the
-  wheel live.
+  colour from the presets, or tap "+" for a colour wheel in a popup; the real light bar
+  follows the wheel live.
 - **Player lights.** The five small LEDs show the controller's number with the PS5's
   patterns (1 = centre, 2 = inner pair, 3 = centre and outer pair, 4 = all but the centre,
   5 = all).
@@ -25,17 +25,24 @@ lights and read its battery).
 - **Order.** Long-press a connected controller and drag it to move it: controllers are
   numbered in the order shown, so dragging the second above the first swaps their numbers
   (and their player lights and automatic colours).
-- **Find.** Makes a controller rumble and blink its lights for about two seconds.
-- **Pressed buttons.** While the app is open, buttons, sticks and triggers pressed on a
-  controller light up on its drawing and its cell glows brighter.
+- **Find.** Makes a controller rumble with both motors at full strength (the most Android
+  allows) and blink its lights, for about 3.4 seconds.
+- **Which one is this?** While the app is open, pressing anything on a controller floods its
+  cell with its colour, in a wave from the controller outward. Its sheet shows the buttons
+  being pressed and the sticks where they are, moving as they move.
 - **Battery.** Level, charging state and connection (Bluetooth or USB) on every cell, with
   notifications when a controller's battery runs low (10 %, then 0 %) and when it is fully
   charged. Both can be turned off in Settings.
-- **At a glance.** A home-screen widget with a square tile per connected controller: its
-  drawing in its colour, glowing, with its name and battery below. The tiles are as large as
+- **At a glance.** A home-screen widget with a square tile per connected controller, drawn
+  as in the app (the controller in lines over a glow of its colour), with its name and
+  battery below. The tiles are as large as
   the widget allows while showing every controller (a 3 × 2 widget shows four to six,
   depending on the home screen); beyond that the tiles scroll. Also a Quick Settings tile, and
-  the service's notification showing the same.
+  the service's notification showing the controllers the same way.
+- **Live icon.** The app's icon is the controller in lines over coloured lights behind glass.
+  Settings can add a copy to the home screen that takes the colours of the connected
+  controllers (Android does not let an app change its own launcher icon, so this one is a
+  shortcut the app redraws).
 - **Remembered controllers.** Controllers that are not connected stay listed, dimmed, with
   when they were last seen; "Forget" frees their number and colour.
 - **Light and dark.** System, Light or Dark, in Settings.
@@ -76,7 +83,10 @@ redrawing.
   Controller"), over Bluetooth from its Bluetooth name ("DualSense Wireless Controller");
   and if no Sony controller is attached over USB at all (`UsbManager`), all are on
   Bluetooth.
-- **Rumble.** `InputDevice.getVibratorManager()`.
+- **Rumble.** `InputDevice.getVibratorManager()`, both motors at amplitude 255.
+- **Sticks.** The joystick axes (X, Y for the left stick, Z, RZ for the right) with a round
+  dead zone: a position v with |v| = m becomes 0 when m < 0.08, else
+  v/m · min(1, (m − 0.08)/0.92), so it keeps its direction and its length is continuous.
 - **Widget layout** (`core/WidgetGrid.kt`). For n controllers in an area of W × H dp with gaps
   of g = 4 dp, c columns give r(c) = ⌈n / c⌉ rows and squares of side
   s(c) = min((W − (c − 1)g) / c, (H − (r(c) − 1)g) / r(c)). With s* = max s(c), if
@@ -90,6 +100,16 @@ redrawing.
   Circle doesn't act as Back in the app.
 - **Starting in the background.** `ConnectionReceiver` listens for Bluetooth connections;
   Android allows starting the light service from that broadcast.
+
+## What apps cannot do
+
+- **Disconnect, connect or turn off a controller.** A DualSense on Bluetooth turns off when
+  the phone drops the connection, so turning it off and disconnecting it are the same thing.
+  Android keeps that to the system: the HID-host profile (`BluetoothHidHost`) and
+  `BluetoothDevice` connect/disconnect are not in the public SDK (checked for Android 14 and
+  16) and need the `BLUETOOTH_PRIVILEGED` permission, which only system apps (and the shell,
+  e.g. through Shizuku) have. Reconnecting always starts at the controller (its PS button):
+  once it is off, its radio is off too.
 
 ## Building
 

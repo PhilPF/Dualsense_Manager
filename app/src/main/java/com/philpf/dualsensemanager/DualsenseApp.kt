@@ -37,10 +37,10 @@ class DualsenseApp : Application() {
         private set
 
     lateinit var manager: ControllerManager
+        private set
 
     /** Sony headphones paired with the phone; talked to while the app is on screen. */
     val headphones: HeadphonesManager by lazy { HeadphonesManager(this) }
-        private set
 
     /** The connected controllers as shown everywhere (screen, notification, widget, tile). */
     lateinit var connected: StateFlow<List<ControllerView>>

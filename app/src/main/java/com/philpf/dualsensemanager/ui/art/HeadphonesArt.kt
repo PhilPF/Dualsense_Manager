@@ -28,15 +28,15 @@ import androidx.compose.ui.graphics.vector.PathParser
 /**
  * Over-ear headphones in lines, in [ink], in the same box as the controller drawing so the two
  * line up, with lines as thick. [glow], when not transparent, lights the cups (the noise
- * control).
+ * control). [lineScale] thickens the lines, as for the controller.
  */
 @Composable
-fun HeadphonesArt(ink: Color, modifier: Modifier = Modifier, glow: Color = Color.Transparent) {
+fun HeadphonesArt(ink: Color, modifier: Modifier = Modifier, glow: Color = Color.Transparent, lineScale: Float = 1f) {
     Canvas(modifier.aspectRatio(ControllerArtAspect)) {
         val s = minOf(size.width / WIDTH, size.height / HEIGHT)
         translate((size.width - WIDTH * s) / 2f, (size.height - HEIGHT * s) / 2f) {
             scale(s, s, pivot = Offset.Zero) {
-                translate(-LEFT, -TOP) { drawHeadphones(ink, glow) }
+                translate(-LEFT, -TOP) { drawHeadphones(ink, glow, lineScale) }
             }
         }
     }
@@ -48,13 +48,11 @@ private const val TOP = -20f
 private const val WIDTH = 1483f
 private const val HEIGHT = 1560f
 
-/** The line width: in the same box, as thick as the controller's. */
+/** The line width in the sheets: in the same box, as thick as the controller's. */
 private const val LINE = 10f
 
 /** How strongly the headphones are filled with ink. */
 private const val FAINT = 0.07f
-
-private val Line = Stroke(width = LINE, cap = StrokeCap.Round, join = StrokeJoin.Round)
 
 private fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
 
@@ -141,18 +139,20 @@ private val Cups = listOf(
     Cup(1091f, 1130f, 225f, 370f, 25.5f),
 )
 
-private fun DrawScope.drawHeadphones(ink: Color, glow: Color) {
+private fun DrawScope.drawHeadphones(ink: Color, glow: Color, lineScale: Float) {
+    val line = Stroke(width = LINE * lineScale, cap = StrokeCap.Round, join = StrokeJoin.Round)
     if (glow.alpha > 0f) Cups.forEach { halo(it, glow) }
     drawPath(Outline, ink.copy(alpha = ink.alpha * FAINT))
-    drawPath(Outline, ink, style = Line)
-    drawPath(BandEdge, ink, style = Line)
-    for (path in Lines) drawPath(path, ink, style = Line)
+    drawPath(Outline, ink, style = line)
+    drawPath(BandEdge, ink, style = line)
+    for (path in Lines) drawPath(path, ink, style = line)
     val holes = ink.copy(alpha = ink.alpha * 0.75f)
-    for ((x, y, r) in Dots) drawCircle(holes, radius = r, center = Offset(x, y))
+    for ((x, y, r) in Dots) drawCircle(holes, radius = r * lineScale, center = Offset(x, y))
     // The jack: its socket and the hole in it, seen from below.
     rotate(-8f, pivot = Offset(1025f, 1423f)) {
-        drawOval(ink, Offset(996f, 1405f), Size(58f, 36f), style = Stroke(LINE * 0.7f))
-        drawOval(ink, Offset(1018f, 1412f), Size(24f, 16f), style = Stroke(LINE * 0.7f))
+        val rim = Stroke(LINE * 0.7f * lineScale)
+        drawOval(ink, Offset(996f, 1405f), Size(58f, 36f), style = rim)
+        drawOval(ink, Offset(1018f, 1412f), Size(24f, 16f), style = rim)
     }
 }
 

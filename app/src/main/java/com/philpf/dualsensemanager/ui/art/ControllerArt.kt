@@ -48,11 +48,14 @@ import com.philpf.dualsensemanager.core.Sticks
  * SOFTWARE.
  */
 
+/** In the panels the drawings' lines are this much thicker than in the sheets, close to the widget's. */
+const val PanelLineScale = 2.2f
+
 /**
  * A DualSense seen from the front, drawn in [ink], its touchpad glowing in [light] while the
  * controller's light is on ([lit]).
  * Buttons in [pressed] light up in the controller's colour, and the sticks follow [sticks]
- * (read while drawing, so moving them only redraws).
+ * (read while drawing, so moving them only redraws). [lineScale] thickens the lines.
  */
 @Composable
 fun ControllerArt(
@@ -62,11 +65,12 @@ fun ControllerArt(
     modifier: Modifier = Modifier,
     pressed: Set<ControllerPart> = emptySet(),
     sticks: (() -> Sticks?)? = null,
+    lineScale: Float = 1f,
 ) {
     Canvas(modifier.aspectRatio(ControllerArtAspect)) {
         val s = size.width / ART_WIDTH
         scale(s, s, pivot = Offset.Zero) {
-            translate(-ART_LEFT, -ART_TOP) { drawController(light, ink, lit, pressed, sticks?.invoke()) }
+            translate(-ART_LEFT, -ART_TOP) { drawController(light, ink, lit, pressed, sticks?.invoke(), lineScale) }
         }
     }
 }
@@ -81,6 +85,9 @@ private const val ART_HEIGHT = 764f
 
 /** The drawing's width over its height. */
 const val ControllerArtAspect = ART_WIDTH / ART_HEIGHT
+
+/** The line width in the sheets, in the drawing's units. */
+private const val LINE = 5f
 
 private fun svgPath(d: String): Path = PathParser().parsePathString(d).toPath()
 
@@ -430,8 +437,15 @@ private const val STICK_TRAVEL = 27f
 private const val STICK_RING = 87.3f
 private const val STICK_CAP = 57.2f
 
-private fun DrawScope.drawController(light: Color, ink: Color, lit: Boolean, pressed: Set<ControllerPart>, sticks: Sticks?) {
-    val line = Stroke(width = 5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+private fun DrawScope.drawController(
+    light: Color,
+    ink: Color,
+    lit: Boolean,
+    pressed: Set<ControllerPart>,
+    sticks: Sticks?,
+    lineScale: Float,
+) {
+    val line = Stroke(width = LINE * lineScale, cap = StrokeCap.Round, join = StrokeJoin.Round)
     val lightUp = pressed.map { TriggerToBumper[it] ?: it }.toSet()
 
     drawPath(Body, ink.copy(alpha = ink.alpha * 0.07f))

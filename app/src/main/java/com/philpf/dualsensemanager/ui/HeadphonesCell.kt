@@ -30,6 +30,7 @@ import com.philpf.dualsensemanager.ui.art.BatteryGlyph
 import com.philpf.dualsensemanager.ui.art.BoltIcon
 import com.philpf.dualsensemanager.ui.art.ControllerArtAspect
 import com.philpf.dualsensemanager.ui.art.HeadphonesArt
+import com.philpf.dualsensemanager.ui.art.PanelLineScale
 import com.philpf.dualsensemanager.ui.glass.Backdrop
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
 import com.philpf.dualsensemanager.ui.glass.GlassSurface
@@ -64,7 +65,12 @@ fun HeadphonesCell(
     }
     val tint = if (ready) Brush.horizontalGradient(0f to glass.accent.copy(alpha = 0.10f), 0.6f to Color.Transparent) else null
     val art = @Composable { artModifier: Modifier ->
-        HeadphonesArt(ink = glass.ink, glow = glow, modifier = artModifier.alpha(if (headphones.connected) 1f else 0.55f))
+        HeadphonesArt(
+            ink = glass.ink,
+            glow = glow,
+            lineScale = PanelLineScale,
+            modifier = artModifier.alpha(if (headphones.connected) 1f else 0.55f),
+        )
     }
     val text = @Composable {
         Text(

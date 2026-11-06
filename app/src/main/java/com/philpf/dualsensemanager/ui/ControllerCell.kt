@@ -41,6 +41,7 @@ import com.philpf.dualsensemanager.ui.art.ControllerArt
 import com.philpf.dualsensemanager.ui.art.ControllerArtAspect
 import com.philpf.dualsensemanager.ui.art.FindIcon
 import com.philpf.dualsensemanager.ui.art.LightBarCenter
+import com.philpf.dualsensemanager.ui.art.PanelLineScale
 import com.philpf.dualsensemanager.ui.art.UsbIcon
 import com.philpf.dualsensemanager.ui.glass.Backdrop
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
@@ -108,6 +109,7 @@ fun ControllerCell(
                 light = light,
                 ink = glass.ink,
                 lit = live?.lightBar == true,
+                lineScale = PanelLineScale,
                 modifier = Modifier
                     .width(ArtWidth)
                     .alpha(if (live != null) 1f else 0.55f)
@@ -224,7 +226,13 @@ fun EmptyCell(backdrop: Backdrop, onBluetooth: () -> Unit, modifier: Modifier = 
             modifier = Modifier.fillMaxSize().padding(start = 12.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ControllerArt(light = glass.textTertiary, ink = glass.ink, lit = false, modifier = Modifier.width(ArtWidth).alpha(0.55f))
+            ControllerArt(
+                light = glass.textTertiary,
+                ink = glass.ink,
+                lit = false,
+                lineScale = PanelLineScale,
+                modifier = Modifier.width(ArtWidth).alpha(0.55f),
+            )
             Spacer(Modifier.width(14.dp))
             Text("No controllers", style = GlassType.title, color = glass.textSecondary, modifier = Modifier.weight(1f))
             GlassIconButton(onClick = onBluetooth, label = "Bluetooth settings") {
@@ -280,6 +288,7 @@ fun ControllerCard(
                 light = light,
                 ink = glass.ink,
                 lit = live?.lightBar == true,
+                lineScale = PanelLineScale,
                 modifier = Modifier
                     .fillMaxWidth(CARD_ART_SHARE)
                     .alpha(if (live != null) 1f else 0.55f)

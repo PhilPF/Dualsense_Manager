@@ -669,6 +669,11 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
                     val parts = (current.parts.filter { old -> event.parts.none { it.part == old.part } } + event.parts).sortedBy { it.part }
                     current.copy(parts = parts)
                 }
+                // Likewise for where each bud is: a part left out keeps its last state.
+                is OpoEvent.Wearing -> update { current ->
+                    val wear = (current.wear.filter { old -> event.parts.none { it.part == old.part } } + event.parts).sortedBy { it.part }
+                    current.copy(wear = wear)
+                }
                 is OpoEvent.Noise -> {
                     reportUse(event.notified)
                     update { it.copy(noise = NoiseControl(event.mode, 0, false, strength = event.strength)) }

@@ -72,10 +72,11 @@ lights and read its battery).
   version of Sony's protocol (such as the WH-1000XM3 to XM5) should work; earbuds are not
   read yet. When the app cannot reach them, the card says why: the channel is busy (Sony's
   app holds it) or they do not answer.
-  OnePlus earbuds (built for the Buds Pro 2) show each bud's battery and the case's, noise
+  OnePlus earbuds (built for the Buds Pro 2) are drawn as their buds and case, showing only
+  the parts in use (a bud out of its case, the case while open) with their batteries; noise
   cancelling at its four strengths (Smart, Extreme, Moderate, Mild), transparency or off,
   and the equalizer presets; their panel waves at a tap, squeeze or swipe on a bud. They
-  have no Turn off: they turn off in their case. They use the headphones' drawing for now.
+  have no Turn off: they turn off in their case.
 - **List or grid.** The bar's first button shows the panels as a list, or as square cards in
   two columns; dragging and putting controllers in order work in both. The bar floats at the
   bottom, and the app's name scrolls away with the list.
@@ -196,7 +197,9 @@ redrawing.
   bit 15 of the command. On connecting (after 300 ms, as HeyMelody waits): the handshake,
   the product id (062014 is the Buds Pro 2), the events offered, of which battery,
   wearing, noise control and gestures are asked for (without that the buds report no
-  change made on them), then the noise control, battery and equalizer. The buds' own
+  change made on them), then the noise control, battery, wearing and equalizer. Wearing
+  gives, for each part, whether a bud is out of the case or in an ear and whether the case
+  is open. The buds' own
   requests (the time, and three questions about the phone) are answered, as some reset
   the link otherwise. The noise control is set with one bit and reported in another table;
   each change is read back.
@@ -252,7 +255,8 @@ Debug builds show sample controllers when started with
   [daidr/dualsense-tester](https://github.com/daidr/dualsense-tester), © 2023 Xuezhou
   Dai, MIT License (full notice in `ui/art/ControllerArt.kt`).
 - The headphones drawing is traced from a front photograph of the WH-XB910N: its outline
-  and main lines, with the left half mirrored.
+  and main lines, with the left half mirrored. The earbuds drawing is traced from a
+  photograph of the OnePlus Buds Pro 2 and their case.
 - The OnePlus earbuds' protocol follows [MacMelody](https://github.com/Omraj09/MacMelody)'s
   description, © 2026 Omraj Sawant, MIT License (credited in `core/OnePlusBuds.kt`).
 - The settings, delete and numbered-list icons follow Google's Material Icons (Apache License 2.0).

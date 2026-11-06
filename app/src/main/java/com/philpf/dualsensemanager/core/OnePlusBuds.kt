@@ -124,6 +124,9 @@ sealed interface OpoEvent {
 
     data class Battery(val parts: List<PartBattery>) : OpoEvent
 
+    /** Where the buds are, and whether the case is open. */
+    data class Wearing(val parts: List<PartWear>) : OpoEvent
+
     /** The noise control; [notified] when it changed on the buds, not as an answer. */
     data class Noise(val mode: NoiseMode, val strength: NoiseStrength?, val notified: Boolean = false) : OpoEvent
 
@@ -142,6 +145,7 @@ object OpoCommands {
     const val HANDSHAKE = 0x0100
     const val PRODUCT = 0x0103
     const val BATTERY = 0x0106
+    const val WEAR = 0x0109
     const val NOISE = 0x010C
     const val EQUALIZER = 0x010F
     const val EVENTS = 0x0200
@@ -195,6 +199,8 @@ object OpoCommands {
                 PRODUCT -> if (ok && p.size >= 4) OpoEvent.Product(hex(p[3]) + hex(p[2]) + hex(p[1])) else null
                 EVENTS -> if (ok && p.size >= 2) OpoEvent.Offered(p.drop(2).take(p[1])) else null
                 BATTERY -> if (ok) battery(p)?.let(OpoEvent::Battery) else null
+                // With a status byte before the count, or without (both are seen).
+                WEAR -> ((if (ok) wearing(p, 1) else null) ?: wearing(p, 0))?.let(OpoEvent::Wearing)
                 NOISE -> if (ok && p.size >= 4 && p[1] == 0x01 && p[2] == 0x01) noise(p.drop(3), notified = false) else null
                 EQUALIZER -> if (ok && p.size >= 2) OpoEvent.Equalizer(p[1]) else null
                 SET_NOISE, SET_EQUALIZER -> if (!ok && p.isNotEmpty()) OpoEvent.Refused(frame.base, p[0]) else null
@@ -204,6 +210,7 @@ object OpoCommands {
         return when (frame.command) {
             PUSH -> when (p.firstOrNull()) {
                 0x01 -> battery(p)?.let(OpoEvent::Battery)
+                0x02 -> wearing(p, 1)?.let(OpoEvent::Wearing)
                 // 03 01 01 is the current mode; 03 02 and 03 04 are other settings.
                 0x03 -> if (p.size >= 4 && p[1] == 0x01 && p[2] == 0x01) noise(p.drop(3), notified = true) else null
                 0xF1 -> if (p.size >= 6) OpoEvent.Gesture else null
@@ -231,6 +238,26 @@ object OpoCommands {
             val raw = p[3 + 2 * i]
             val level = raw and 0x7F
             if (level == 0) null else PartBattery(part, level.coerceAtMost(100), raw and 0x80 != 0)
+        }
+    }
+
+    /**
+     * From [at]: the count, then part and state pairs (part 1 left, 2 right, 3 case; state bit 0
+     * out of the case, bit 1 in an ear, bit 2 lid open). Null unless every part is 1 to 3 and
+     * the pairs fill the rest.
+     */
+    private fun wearing(p: List<Int>, at: Int): List<PartWear>? {
+        val count = p.getOrNull(at) ?: return null
+        if (count == 0 || p.size != at + 1 + 2 * count) return null
+        return (0 until count).map { i ->
+            val part = when (p[at + 1 + 2 * i]) {
+                1 -> BudPart.LEFT
+                2 -> BudPart.RIGHT
+                3 -> BudPart.CASE
+                else -> return null
+            }
+            val state = p[at + 2 + 2 * i]
+            PartWear(part, outOfCase = state and 0x01 != 0, inEar = state and 0x02 != 0, lidOpen = state and 0x04 != 0)
         }
     }
 
@@ -309,7 +336,7 @@ object OnePlusBuds {
  * comes (matched on the command and the sequence number it repeats) or after a few tries; the
  * buds' own requests answered at once. On connecting: the handshake, the product id and the
  * events they offer (battery, wearing, noise control and gestures are then asked for), then the
- * noise control, battery and equalizer. A change is read back, as an accepted change is not
+ * noise control, battery, wearing and equalizer. A change is read back, as an accepted change is not
  * always applied.
  */
 class OnePlusSession {
@@ -334,6 +361,7 @@ class OnePlusSession {
         queue.addLast(OpoCommands.EVENTS to emptyList())
         queue.addLast(OpoCommands.NOISE to OpoCommands.CURRENT_NOISE)
         queue.addLast(OpoCommands.BATTERY to emptyList())
+        queue.addLast(OpoCommands.WEAR to emptyList())
         queue.addLast(OpoCommands.EQUALIZER to emptyList())
         return pump()
     }

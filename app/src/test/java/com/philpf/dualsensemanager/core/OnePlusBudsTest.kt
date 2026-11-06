@@ -121,12 +121,13 @@ class OnePlusBudsTest {
         // A late reply to an earlier try is read, but does not answer the one in flight.
         assertEquals(emptyList<OpoFrame>(), decode(session.receive(reply(OpoCommands.NOISE, 2, "00:01:01:08:00"), 0L).first))
         assertEquals(listOf(OpoFrame(OpoCommands.BATTERY, 6)), decode(session.receive(reply(OpoCommands.NOISE, 5, "00:01:01:08:00"), 0L).first))
-        assertEquals(listOf(OpoFrame(OpoCommands.EQUALIZER, 7)), decode(session.receive(reply(OpoCommands.BATTERY, 6, "00:01:01:5a"), 0L).first))
-        assertEquals(emptyList<OpoFrame>(), decode(session.receive(reply(OpoCommands.EQUALIZER, 7, "00:00"), 0L).first))
+        assertEquals(listOf(OpoFrame(OpoCommands.WEAR, 7)), decode(session.receive(reply(OpoCommands.BATTERY, 6, "00:01:01:5a"), 0L).first))
+        assertEquals(listOf(OpoFrame(OpoCommands.EQUALIZER, 8)), decode(session.receive(reply(OpoCommands.WEAR, 7, "00:02:01:03:02:03"), 0L).first))
+        assertEquals(emptyList<OpoFrame>(), decode(session.receive(reply(OpoCommands.EQUALIZER, 8, "00:00"), 0L).first))
         assertFalse(session.waiting)
         // A change is read back.
-        assertEquals(listOf(OpoFrame(OpoCommands.SET_EQUALIZER, 8, hex("02"))), decode(session.setEqualizer(2)))
-        assertEquals(listOf(OpoFrame(OpoCommands.EQUALIZER, 9)), decode(session.receive(reply(OpoCommands.SET_EQUALIZER, 8, "00"), 0L).first))
+        assertEquals(listOf(OpoFrame(OpoCommands.SET_EQUALIZER, 9, hex("02"))), decode(session.setEqualizer(2)))
+        assertEquals(listOf(OpoFrame(OpoCommands.EQUALIZER, 10)), decode(session.receive(reply(OpoCommands.SET_EQUALIZER, 9, "00"), 0L).first))
     }
 
     @Test
@@ -138,6 +139,29 @@ class OnePlusBudsTest {
         // Some realme buds never answer the handshake: the product id goes next.
         assertEquals(listOf(OpoFrame(OpoCommands.PRODUCT, 2)), decode(session.timeout()))
         assertEquals(emptyList<ByteArray>(), OnePlusSession().timeout())
+    }
+
+    @Test
+    fun whereTheBudsAre() {
+        fun wear(part: BudPart, state: Int) = PartWear(part, state and 1 != 0, state and 2 != 0, state and 4 != 0)
+        // QuickBuds' states: 0 in the closed case, 1 and 5 out of an ear, 3 and 7 in one, 4 in the open case.
+        val both = OpoCommands.parse(reply(OpoCommands.WEAR, 3, "00:03:01:03:02:03:03:04")) as OpoEvent.Wearing
+        assertEquals(listOf(wear(BudPart.LEFT, 3), wear(BudPart.RIGHT, 3), wear(BudPart.CASE, 4)), both.parts)
+        // A reply may come without its status byte.
+        val one = OpoCommands.parse(reply(OpoCommands.WEAR, 3, "02:01:07:02:04")) as OpoEvent.Wearing
+        assertEquals(listOf(wear(BudPart.LEFT, 7), wear(BudPart.RIGHT, 4)), one.parts)
+        assertEquals(OpoEvent.Wearing(listOf(wear(BudPart.LEFT, 0), wear(BudPart.RIGHT, 0), wear(BudPart.CASE, 0))), OpoCommands.parse(push("02:03:01:00:02:00:03:00")))
+        assertNull(OpoCommands.parse(push("02:02:01:03:05:03")))
+        // In use: the buds out of the case, the case while open.
+        val pair = Headphones("a", "Buds", connected = true, kind = HeadphonesKind.ONEPLUS)
+        assertEquals(setOf(BudPart.LEFT, BudPart.RIGHT, BudPart.CASE), pair.copy(wear = both.parts).inUse)
+        assertEquals(setOf(BudPart.LEFT), pair.copy(wear = one.parts).inUse)
+        assertEquals(setOf(BudPart.CASE), pair.copy(wear = listOf(wear(BudPart.LEFT, 4), wear(BudPart.RIGHT, 4), wear(BudPart.CASE, 4))).inUse)
+        assertNull(pair.copy(wear = listOf(wear(BudPart.LEFT, 0), wear(BudPart.RIGHT, 0))).inUse)
+        // Their batteries are the ones shown; all known ones when none is in use.
+        val batteries = listOf(PartBattery(BudPart.LEFT, 80, false), PartBattery(BudPart.RIGHT, 70, false), PartBattery(BudPart.CASE, 40, true))
+        assertEquals(batteries.take(1), pair.copy(parts = batteries, wear = one.parts).shownBatteries)
+        assertEquals(batteries, pair.copy(parts = batteries).shownBatteries)
     }
 
     @Test

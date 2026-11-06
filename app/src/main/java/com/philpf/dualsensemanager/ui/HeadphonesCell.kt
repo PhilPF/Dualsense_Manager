@@ -30,6 +30,7 @@ import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
 import com.philpf.dualsensemanager.ui.art.BatteryGlyph
 import com.philpf.dualsensemanager.ui.art.BoltIcon
+import com.philpf.dualsensemanager.ui.art.BudsArt
 import com.philpf.dualsensemanager.ui.art.ControllerArtAspect
 import com.philpf.dualsensemanager.ui.art.HeadphonesArt
 import com.philpf.dualsensemanager.ui.art.PanelLineScale
@@ -67,12 +68,13 @@ fun HeadphonesCell(
     }
     val tint = if (ready) Brush.horizontalGradient(0f to glass.accent.copy(alpha = 0.10f), 0.6f to Color.Transparent) else null
     val art = @Composable { artModifier: Modifier ->
-        HeadphonesArt(
-            ink = glass.ink,
-            glow = glow,
-            lineScale = PanelLineScale,
-            modifier = artModifier.alpha(if (headphones.connected) 1f else 0.55f),
-        )
+        val faded = artModifier.alpha(if (headphones.connected) 1f else 0.55f)
+        if (headphones.kind == HeadphonesKind.ONEPLUS) {
+            // Only the parts in use: the buds out of their case, the case while open.
+            BudsArt(ink = glass.ink, shown = headphones.inUse.orEmpty(), glow = glow, lineScale = PanelLineScale, modifier = faded)
+        } else {
+            HeadphonesArt(ink = glass.ink, glow = glow, lineScale = PanelLineScale, modifier = faded)
+        }
     }
     val text = @Composable {
         Text(
@@ -155,8 +157,9 @@ private fun HeadphonesStatus(headphones: Headphones) {
         return
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Earbuds: each bud's level, the glyph showing the lower; headphones: their one battery.
-        val buds = headphones.parts.filter { it.part != BudPart.CASE }
+        // Earbuds: the level of each bud in use (the case's when only it is), the glyph showing
+        // the lower; headphones: their one battery.
+        val buds = headphones.shownBatteries.let { shown -> shown.filter { it.part != BudPart.CASE }.ifEmpty { shown } }
         val level = buds.minOfOrNull { it.level } ?: headphones.battery
         val charging = if (buds.isEmpty()) headphones.charging else buds.any { it.charging }
         if (level != null) {

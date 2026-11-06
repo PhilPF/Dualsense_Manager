@@ -42,6 +42,12 @@ enum class BudPart { LEFT, RIGHT, CASE }
 /** One earbud's or the case's battery. */
 data class PartBattery(val part: BudPart, val level: Int, val charging: Boolean)
 
+/** Where a bud is (out of its case, in an ear), or whether the case is open: OnePlus earbuds' wearing report. */
+data class PartWear(val part: BudPart, val outOfCase: Boolean, val inEar: Boolean, val lidOpen: Boolean) {
+    /** A bud out of its case, or the case while open. */
+    val inUse: Boolean get() = if (part == BudPart.CASE) lidOpen else outOfCase
+}
+
 /** A pair of headphones or earbuds paired with the phone, and what is known about them now. */
 data class Headphones(
     /** Their Bluetooth address, which identifies them. */
@@ -59,6 +65,8 @@ data class Headphones(
     val charging: Boolean = false,
     /** Earbuds' batteries: each bud's and the case's, those known. */
     val parts: List<PartBattery> = emptyList(),
+    /** Earbuds' wearing: where each bud is, and whether the case is open; empty when not known. */
+    val wear: List<PartWear> = emptyList(),
     val noise: NoiseControl? = null,
     /** The equalizer preset in use, and the ones that can be chosen. */
     val equalizer: EqPreset? = null,
@@ -67,7 +75,15 @@ data class Headphones(
     val volume: Int? = null,
     /** The highest media volume. */
     val maxVolume: Int = 0,
-)
+) {
+    /** The parts in use (buds out of their case, the case while open); null when not known or none. */
+    val inUse: Set<BudPart>?
+        get() = wear.filter { it.inUse }.map { it.part }.toSet().ifEmpty { null }
+
+    /** The batteries to show: those of the parts in use, else all known. */
+    val shownBatteries: List<PartBattery>
+        get() = inUse?.let { used -> parts.filter { it.part in used } }?.ifEmpty { null } ?: parts
+}
 
 /** Why the app cannot talk to a pair of connected headphones. */
 enum class HeadphonesProblem {

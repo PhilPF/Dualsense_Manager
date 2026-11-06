@@ -42,6 +42,7 @@ import com.philpf.dualsensemanager.device.HeadphonesSource
 import com.philpf.dualsensemanager.ui.art.BatteryGlyph
 import com.philpf.dualsensemanager.ui.art.BluetoothIcon
 import com.philpf.dualsensemanager.ui.art.BoltIcon
+import com.philpf.dualsensemanager.ui.art.BudsArt
 import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.HeadphonesArt
 import com.philpf.dualsensemanager.ui.art.PowerIcon
@@ -73,15 +74,18 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
     val approval = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
 
     Box(Modifier.fillMaxWidth()) {
-        HeadphonesArt(
-            ink = glass.ink,
-            glow = when (noise?.mode) {
-                NoiseMode.NOISE_CANCELLING -> glass.accent.copy(alpha = 0.32f)
-                NoiseMode.AMBIENT -> glass.accent.copy(alpha = 0.14f)
-                else -> Color.Transparent
-            },
-            modifier = Modifier.align(Alignment.Center).padding(top = 6.dp).width(220.dp),
-        )
+        val glow = when (noise?.mode) {
+            NoiseMode.NOISE_CANCELLING -> glass.accent.copy(alpha = 0.32f)
+            NoiseMode.AMBIENT -> glass.accent.copy(alpha = 0.14f)
+            else -> Color.Transparent
+        }
+        val artModifier = Modifier.align(Alignment.Center).padding(top = 6.dp).width(220.dp)
+        if (oneplus) {
+            // Only the parts in use: the buds out of their case, the case while open.
+            BudsArt(ink = glass.ink, shown = headphones.inUse.orEmpty(), glow = glow, modifier = artModifier)
+        } else {
+            HeadphonesArt(ink = glass.ink, glow = glow, modifier = artModifier)
+        }
         GlassIconButton(onClick = onClose, label = "Close", size = 36.dp, modifier = Modifier.align(Alignment.TopEnd)) {
             CloseIcon(glass.textSecondary, Modifier.size(14.dp))
         }
@@ -104,9 +108,9 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
         return
     }
 
-    // Headphones' one battery, or each bud's and the case's.
+    // Headphones' one battery, or those of the parts in use (all known when not known).
     val batteries: List<Triple<String, Int?, Boolean>> = if (oneplus) {
-        headphones.parts.map { Triple<String, Int?, Boolean>(partName(it.part) + " ", it.level, it.charging) }
+        headphones.shownBatteries.map { Triple<String, Int?, Boolean>(partName(it.part) + " ", it.level, it.charging) }
             .ifEmpty { listOf(Triple<String, Int?, Boolean>("", null, false)) }
     } else {
         listOf(Triple<String, Int?, Boolean>("", headphones.battery, headphones.charging))

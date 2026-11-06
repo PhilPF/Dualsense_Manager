@@ -22,7 +22,9 @@ import com.philpf.dualsensemanager.core.ThemeMode
 import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
 import com.philpf.dualsensemanager.device.DemoInput
+import com.philpf.dualsensemanager.device.DemoHeadphones
 import com.philpf.dualsensemanager.device.DemoSource
+import com.philpf.dualsensemanager.device.HeadphonesSource
 import com.philpf.dualsensemanager.device.InputHighlights
 import com.philpf.dualsensemanager.service.LightKeeperService
 import com.philpf.dualsensemanager.ui.MainScreen
@@ -40,12 +42,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Debug builds can show sample controllers, for screenshots: --ez demo true
-        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget|order]
+        // [--es theme light|dark] [--es open settings|demo-1|demo-2|demo-3|widget|order|headphones]
         // [--es press CROSS,L1] [--es sticks leftX,leftY,rightX,rightY], on the first sample,
-        // [--ez mono true] for the monospaced font.
+        // [--ez mono true] for the monospaced font, [--ez grid true] for square cards.
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         val demo = debuggable && intent.getBooleanExtra("demo", false)
         val source: ControllerSource = if (demo) DemoSource() else app.manager
+        val headphones: HeadphonesSource = if (demo) DemoHeadphones() else app.headphones
+        val forcedGrid = demo && intent.getBooleanExtra("grid", false)
         val forcedTheme = if (demo) {
             intent.getStringExtra("theme")?.let { name -> ThemeMode.entries.firstOrNull { it.name.equals(name, ignoreCase = true) } }
         } else {
@@ -89,12 +93,14 @@ class MainActivity : ComponentActivity() {
                 }
                 MainScreen(
                     source = source,
+                    headphones = headphones,
                     settings = app.settings,
                     input = input,
                     theme = mode,
                     resumeTick = resumeTick,
                     askForPermissions = !demo,
                     initiallyOpen = initiallyOpen,
+                    forceGrid = forcedGrid,
                 )
             }
         }
@@ -115,6 +121,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         app.manager.setUiVisible(true)
+        app.headphones.setUiVisible(true)
         app.uiVisible.value = true
         // Controllers may have connected while the service could not be started.
         if (app.manager.live.value.isNotEmpty()) LightKeeperService.ensureRunning(this)
@@ -127,6 +134,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         app.manager.setUiVisible(false)
+        app.headphones.setUiVisible(false)
         app.uiVisible.value = false
         super.onStop()
     }

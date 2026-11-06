@@ -86,6 +86,24 @@ fun GearIcon(tint: Color, modifier: Modifier = Modifier.size(22.dp)) = Icon24(mo
     drawPath(GearPath, tint)
 }
 
+/** Showing the cells as square cards in two columns. */
+@Composable
+fun GridIcon(tint: Color, modifier: Modifier = Modifier.size(20.dp)) = Icon24(modifier) {
+    for (x in listOf(4f, 13f)) {
+        for (y in listOf(4f, 13f)) {
+            drawRoundRect(tint, topLeft = Offset(x, y), size = Size(7f, 7f), cornerRadius = CornerRadius(2f), style = lineStroke(2f))
+        }
+    }
+}
+
+/** Showing the cells as a list of wide panels. */
+@Composable
+fun ListIcon(tint: Color, modifier: Modifier = Modifier.size(20.dp)) = Icon24(modifier) {
+    for (y in listOf(4f, 13f)) {
+        drawRoundRect(tint, topLeft = Offset(4f, y), size = Size(16f, 7f), cornerRadius = CornerRadius(2f), style = lineStroke(2f))
+    }
+}
+
 /** Putting the controllers in order: a numbered list. */
 @Composable
 fun OrderIcon(tint: Color, modifier: Modifier = Modifier.size(22.dp)) = Icon24(modifier) {

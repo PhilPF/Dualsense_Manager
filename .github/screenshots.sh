@@ -30,6 +30,11 @@ shot() {
 
 shot main-dark --es theme dark
 shot main-light --es theme light
+# The same as square cards in two columns.
+shot grid-dark --es theme dark --ez grid true
+shot grid-light --es theme light --ez grid true
+# The sample headphones' sheet: noise control and equalizer.
+shot headphones-dark --es theme dark --es open headphones
 # Pressing on the first sample (again every 1.4 s): its cell floods with its colour. A few
 # frames in a row, to catch a wave on its way.
 open_app --es theme dark --es press CROSS,L1

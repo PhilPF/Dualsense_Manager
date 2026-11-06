@@ -3,7 +3,8 @@
 An Android app for telling apart the PS5 controllers (DualSense and DualSense Edge)
 connected to a phone or tablet. Each controller gets its own light-bar colour, a number
 and its player lights, and the app shows its battery, whether it is charging, and whether
-it is connected over Bluetooth or a USB cable.
+it is connected over Bluetooth or a USB cable. It also controls Sony headphones (built for
+the WH-XB910N): battery, noise cancelling and ambient sound, and the equalizer.
 
 Requires **Android 12 or newer** (the first version that lets apps set a controller's
 lights and read its battery).
@@ -59,6 +60,14 @@ lights and read its battery).
   when they were last seen. Their settings wait until they are back; "Forget" frees their
   number and colour.
 - **Light and dark, and a monospaced font**, in Settings.
+- **Headphones.** Sony headphones paired with the phone get their own section, above the
+  controllers: battery and noise control at a glance, and a button that steps the noise
+  control as the headphones' own does (noise cancelling, ambient sound, off). Their sheet
+  sets the ambient sound level and voice focus, picks an equalizer preset, and turns them
+  off. Built for the WH-XB910N; others of its generation should work.
+- **List or grid.** The bar's first button shows the panels as a list, or as square cards in
+  two columns; dragging and putting controllers in order work in both. The bar floats at the
+  bottom, and the app's name scrolls away with the list.
 
 ## Design
 
@@ -144,6 +153,16 @@ redrawing.
 - **Pressed buttons.** The activity receives the controllers' key and joystick events while
   it is in front and maps them to parts of the drawing; it keeps them, so a button such as
   Circle doesn't act as Back in the app.
+- **Headphones.** Sony's own app talks to its headphones over a Bluetooth RFCOMM channel,
+  in a protocol Sony does not publish; this app speaks version 1 of it, written from the
+  description in [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) (no code
+  taken; its test vectors are the tests in `core/SonyHeadphones`). A message is 0x3E, then
+  type, sequence number, payload length and payload, a checksum (the sum of those bytes),
+  and 0x3C, with those markers escaped inside. Each request waits for the headphones'
+  acknowledgement, which gives the next sequence number (0 or 1). The app opens the channel
+  only while it is on screen, to headphones that are connected; Sony's app, if open at the
+  same time, may hold it. Headphones that speak version 2 (the WH-1000XM5 and later) are
+  listed but not controlled yet.
 - **Starting in the background.** `ConnectionReceiver` listens for Bluetooth connections;
   Android allows starting the light service from that broadcast.
 

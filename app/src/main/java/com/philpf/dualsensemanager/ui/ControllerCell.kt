@@ -233,3 +233,86 @@ fun EmptyCell(backdrop: Backdrop, onBluetooth: () -> Unit, modifier: Modifier = 
         }
     }
 }
+
+private val CardPadding = 14.dp
+
+/** The share of a card's width its drawing takes. */
+private const val CARD_ART_SHARE = 0.62f
+
+/**
+ * One controller as a square card, for the grid: its drawing at the top left, lit in its colour
+ * (pressing anything floods the card from its light bar), Find at the top right, and its name
+ * and status below.
+ */
+@Composable
+fun ControllerCard(
+    view: ControllerView,
+    light: Color,
+    backdrop: Backdrop,
+    now: Long,
+    onOpen: () -> Unit,
+    onFind: () -> Unit,
+    onGlow: (Offset) -> Unit,
+    modifier: Modifier = Modifier,
+    presses: Int = 0,
+) {
+    val glass = LocalGlass.current
+    val live = view.live
+    val waves = rememberPressWaves(presses)
+    val tint = if (live != null) {
+        Brush.verticalGradient(0f to light.copy(alpha = if (glass.isDark) 0.16f else 0.12f), 0.7f to Color.Transparent)
+    } else {
+        null
+    }
+    GlassSurface(backdrop = backdrop, modifier = modifier.fillMaxSize(), shape = CellShape, tint = tint, onClick = onOpen) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val pad = CardPadding.toPx()
+                    val artWidth = (size.width - 2 * pad) * CARD_ART_SHARE
+                    val artHeight = artWidth / ControllerArtAspect
+                    drawPressWaves(waves, Offset(pad + artWidth * LightBarCenter.x, pad + artHeight * LightBarCenter.y), light)
+                }
+                .padding(CardPadding),
+        ) {
+            ControllerArt(
+                light = light,
+                ink = glass.ink,
+                lit = live?.lightBar == true,
+                modifier = Modifier
+                    .fillMaxWidth(CARD_ART_SHARE)
+                    .alpha(if (live != null) 1f else 0.55f)
+                    .onGloballyPositioned { coords ->
+                        if (live != null) {
+                            val bounds = coords.boundsInRoot()
+                            onGlow(Offset(bounds.left + bounds.width * LightBarCenter.x, bounds.top + bounds.height * LightBarCenter.y))
+                        }
+                    },
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = view.title,
+                style = GlassType.title,
+                color = if (live != null) glass.textPrimary else glass.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            view.subtitle?.let {
+                Text(it, style = GlassType.caption, color = glass.textSecondary, maxLines = 1)
+            }
+            Spacer(Modifier.height(6.dp))
+            if (live != null) LiveStatus(live) else AwayStatus(view, now)
+        }
+        if (live != null) {
+            GlassIconButton(
+                onClick = onFind,
+                label = "Find ${view.title}",
+                size = 38.dp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+            ) {
+                FindIcon(glass.textPrimary, Modifier.size(20.dp))
+            }
+        }
+    }
+}

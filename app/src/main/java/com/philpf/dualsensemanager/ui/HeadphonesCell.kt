@@ -1,0 +1,158 @@
+package com.philpf.dualsensemanager.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.NoiseControl
+import com.philpf.dualsensemanager.core.NoiseMode
+import com.philpf.dualsensemanager.ui.art.BatteryGlyph
+import com.philpf.dualsensemanager.ui.art.BoltIcon
+import com.philpf.dualsensemanager.ui.art.HeadphonesArt
+import com.philpf.dualsensemanager.ui.glass.Backdrop
+import com.philpf.dualsensemanager.ui.glass.GlassIconButton
+import com.philpf.dualsensemanager.ui.glass.GlassSurface
+import com.philpf.dualsensemanager.ui.theme.GlassType
+import com.philpf.dualsensemanager.ui.theme.LocalGlass
+
+/**
+ * A pair of headphones, as a wide panel or a [square] card: their drawing (the cups lit while
+ * noise cancelling or letting ambient sound in), their name, battery and noise control, and a
+ * button that steps the noise control as their own button does.
+ */
+@Composable
+fun HeadphonesCell(
+    headphones: Headphones,
+    backdrop: Backdrop,
+    onOpen: () -> Unit,
+    onStepNoise: () -> Unit,
+    modifier: Modifier = Modifier,
+    square: Boolean = false,
+) {
+    val glass = LocalGlass.current
+    val ready = headphones.ready
+    val noise = headphones.noise
+    val glow = when (noise?.mode) {
+        NoiseMode.NOISE_CANCELLING -> glass.accent.copy(alpha = 0.32f)
+        NoiseMode.AMBIENT -> glass.accent.copy(alpha = 0.14f)
+        else -> Color.Transparent
+    }
+    val tint = if (ready) Brush.horizontalGradient(0f to glass.accent.copy(alpha = 0.10f), 0.6f to Color.Transparent) else null
+    val art = @Composable { artModifier: Modifier ->
+        HeadphonesArt(ink = glass.ink, glow = glow, modifier = artModifier.alpha(if (headphones.connected) 1f else 0.55f))
+    }
+    val text = @Composable {
+        Text(
+            text = headphones.name,
+            style = GlassType.title,
+            color = if (headphones.connected) glass.textPrimary else glass.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(if (square) 6.dp else 8.dp))
+        HeadphonesStatus(headphones)
+    }
+    val button = @Composable { buttonModifier: Modifier ->
+        if (ready && noise != null) {
+            GlassIconButton(onClick = onStepNoise, label = "Noise control: ${noiseName(noise.mode)}", size = if (square) 38.dp else 42.dp, modifier = buttonModifier) {
+                Text(noiseShort(noise.mode), style = GlassType.caption.copy(fontWeight = FontWeight.SemiBold), color = glass.textPrimary)
+            }
+        }
+    }
+    GlassSurface(
+        backdrop = backdrop,
+        modifier = modifier.fillMaxWidth().then(if (square) Modifier.fillMaxSize() else Modifier.height(CellHeight)),
+        shape = CellShape,
+        tint = tint,
+        onClick = onOpen,
+    ) {
+        if (square) {
+            Column(Modifier.fillMaxSize().padding(14.dp)) {
+                art(Modifier.fillMaxWidth(0.62f))
+                Spacer(Modifier.weight(1f))
+                text()
+            }
+            button(Modifier.align(Alignment.TopEnd).padding(10.dp))
+        } else {
+            Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                art(Modifier.width(112.dp))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) { text() }
+                Spacer(Modifier.width(8.dp))
+                button(Modifier)
+            }
+        }
+    }
+}
+
+/** Battery and noise control, or why they are not known. */
+@Composable
+private fun HeadphonesStatus(headphones: Headphones) {
+    val glass = LocalGlass.current
+    val status = when {
+        !headphones.connected -> "Not connected"
+        !headphones.supported -> "Not supported yet"
+        !headphones.ready -> "Connecting…"
+        else -> null
+    }
+    if (status != null) {
+        Text(status, style = GlassType.callout, color = glass.textTertiary, maxLines = 1)
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        val battery = headphones.battery
+        if (battery != null) {
+            val low = battery <= 15 && !headphones.charging
+            val ink = if (low) glass.danger else glass.textPrimary
+            BatteryGlyph(fraction = battery / 100f, tint = ink.copy(alpha = 0.75f), fill = if (headphones.charging) glass.charging else ink)
+            Text("$battery%", style = GlassType.callout, color = ink, maxLines = 1)
+            if (headphones.charging) BoltIcon(glass.charging, Modifier.size(15.dp))
+        }
+        headphones.noise?.let {
+            Text(noiseLabel(it), style = GlassType.callout, color = glass.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** The mode after [mode], as the headphones' own button steps: noise cancelling, ambient sound, off. */
+fun nextNoiseMode(mode: NoiseMode): NoiseMode = when (mode) {
+    NoiseMode.NOISE_CANCELLING -> NoiseMode.AMBIENT
+    NoiseMode.AMBIENT -> NoiseMode.OFF
+    NoiseMode.OFF -> NoiseMode.NOISE_CANCELLING
+}
+
+fun noiseName(mode: NoiseMode): String = when (mode) {
+    NoiseMode.NOISE_CANCELLING -> "Noise cancelling"
+    NoiseMode.AMBIENT -> "Ambient sound"
+    NoiseMode.OFF -> "Off"
+}
+
+private fun noiseShort(mode: NoiseMode): String = when (mode) {
+    NoiseMode.NOISE_CANCELLING -> "NC"
+    NoiseMode.AMBIENT -> "AMB"
+    NoiseMode.OFF -> "OFF"
+}
+
+/** "Noise cancelling", "Ambient 12", "Noise control off". */
+private fun noiseLabel(control: NoiseControl): String = when (control.mode) {
+    NoiseMode.NOISE_CANCELLING -> "Noise cancelling"
+    NoiseMode.AMBIENT -> "Ambient ${control.ambientLevel}"
+    NoiseMode.OFF -> "Noise control off"
+}

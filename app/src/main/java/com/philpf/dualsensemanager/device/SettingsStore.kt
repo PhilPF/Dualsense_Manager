@@ -21,6 +21,11 @@ class SettingsStore(context: Context) {
     /** Whether all text uses a monospaced font. */
     val monospace: StateFlow<Boolean> = _monospace.asStateFlow()
 
+    private val _grid = MutableStateFlow(prefs.getBoolean(KEY_GRID, false))
+
+    /** Whether the main screen shows square cards in two columns, rather than a list of wide panels. */
+    val grid: StateFlow<Boolean> = _grid.asStateFlow()
+
     private val _iconFollowsControllers = MutableStateFlow(prefs.getBoolean(KEY_ICON, false))
 
     /** Whether the launcher icon takes the connected controllers' colours. */
@@ -49,6 +54,11 @@ class SettingsStore(context: Context) {
         prefs.edit().putBoolean(KEY_MONOSPACE, on).apply()
     }
 
+    fun setGrid(on: Boolean) {
+        _grid.value = on
+        prefs.edit().putBoolean(KEY_GRID, on).apply()
+    }
+
     fun setIconFollowsControllers(on: Boolean) {
         _iconFollowsControllers.value = on
         prefs.edit().putBoolean(KEY_ICON, on).apply()
@@ -67,6 +77,7 @@ class SettingsStore(context: Context) {
     private companion object {
         const val KEY_THEME = "theme"
         const val KEY_MONOSPACE = "monospace"
+        const val KEY_GRID = "grid"
         const val KEY_ICON = "icon_follows_controllers"
         const val KEY_LOW = "low_battery_alerts"
         const val KEY_FULL = "full_battery_alerts"

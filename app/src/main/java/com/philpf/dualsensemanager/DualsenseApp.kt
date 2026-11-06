@@ -9,6 +9,7 @@ import com.philpf.dualsensemanager.core.ControllerView
 import com.philpf.dualsensemanager.core.ControllerViews
 import com.philpf.dualsensemanager.device.AppIcon
 import com.philpf.dualsensemanager.device.ControllerManager
+import com.philpf.dualsensemanager.device.HeadphonesManager
 import com.philpf.dualsensemanager.device.ProfileStore
 import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.service.BatteryAlertNotification
@@ -36,6 +37,9 @@ class DualsenseApp : Application() {
         private set
 
     lateinit var manager: ControllerManager
+
+    /** Sony headphones paired with the phone; talked to while the app is on screen. */
+    val headphones: HeadphonesManager by lazy { HeadphonesManager(this) }
         private set
 
     /** The connected controllers as shown everywhere (screen, notification, widget, tile). */

@@ -11,24 +11,27 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsTopHeight
@@ -41,7 +44,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +64,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.compose.ui.zIndex
 import com.philpf.dualsensemanager.Permissions
 import com.philpf.dualsensemanager.core.ControllerPart
@@ -72,22 +75,26 @@ import com.philpf.dualsensemanager.core.Players
 import com.philpf.dualsensemanager.core.ThemeMode
 import com.philpf.dualsensemanager.device.ControllerInput
 import com.philpf.dualsensemanager.device.ControllerSource
+import com.philpf.dualsensemanager.device.HeadphonesSource
 import com.philpf.dualsensemanager.device.SettingsStore
 import com.philpf.dualsensemanager.service.LightKeeperService
 import com.philpf.dualsensemanager.ui.art.BluetoothIcon
 import com.philpf.dualsensemanager.ui.art.CloseIcon
 import com.philpf.dualsensemanager.ui.art.GearIcon
+import com.philpf.dualsensemanager.ui.art.GridIcon
+import com.philpf.dualsensemanager.ui.art.ListIcon
 import com.philpf.dualsensemanager.ui.art.OrderIcon
 import com.philpf.dualsensemanager.ui.glass.Backdrop
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
 import com.philpf.dualsensemanager.ui.glass.GlassSurface
+import com.philpf.dualsensemanager.ui.glass.SectionLabel
 import com.philpf.dualsensemanager.ui.glass.backdropSource
 import com.philpf.dualsensemanager.ui.glass.rememberBackdrop
 import com.philpf.dualsensemanager.ui.theme.GlassType
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
 import kotlin.math.roundToInt
 
-private val TopBarHeight = 56.dp
+private val BottomBarHeight = 56.dp
 private val CellGap = 14.dp
 private const val OPAQUE = 0xFF shl 24
 
@@ -96,6 +103,9 @@ const val OPEN_SETTINGS = "settings"
 
 /** Starts putting the controllers in order when passed as the initially open sheet. */
 const val OPEN_ORDER = "order"
+
+/** Opens the first headphones' sheet when passed as the initially open sheet. */
+const val OPEN_HEADPHONES = "headphones"
 
 /**
  * The one screen: a cell per controller, each glowing in its light colour, under a floating
@@ -112,12 +122,14 @@ const val OPEN_ORDER = "order"
 @Composable
 fun MainScreen(
     source: ControllerSource,
+    headphones: HeadphonesSource,
     settings: SettingsStore,
     input: ControllerInput,
     theme: ThemeMode,
     resumeTick: Int,
     askForPermissions: Boolean,
     initiallyOpen: String? = null,
+    forceGrid: Boolean = false,
 ) {
     val context = LocalContext.current
     val glass = LocalGlass.current
@@ -131,6 +143,18 @@ fun MainScreen(
     // Read only while drawing the open sheet's controller, so moving a stick only redraws it.
     val sticks = input.sticks.collectAsState()
     val views = remember(profiles, players, live) { ControllerViews.build(profiles.values, players, live) }
+    val headphoneList by headphones.headphones.collectAsState()
+    val storedGrid by settings.grid.collectAsState()
+    val grid = forceGrid || storedGrid
+    val columns = if (grid) 2 else 1
+
+    // Headphones' sheet; shownHeadphones keeps its content during the closing animation.
+    var openHeadphones by rememberSaveable {
+        mutableStateOf(if (initiallyOpen == OPEN_HEADPHONES) headphones.headphones.value.firstOrNull()?.address else null)
+    }
+    var shownHeadphones by rememberSaveable { mutableStateOf(openHeadphones) }
+    val openPhones = headphoneList.firstOrNull { it.address == openHeadphones }
+    val shownPhones = headphoneList.firstOrNull { it.address == shownHeadphones }
     val sortedPlayers = remember(players) { players.values.sortedBy { it.name.lowercase() } }
     val now = remember(resumeTick, live) { System.currentTimeMillis() }
 
@@ -138,7 +162,7 @@ fun MainScreen(
     fun pressedOf(view: ControllerView): Set<ControllerPart> = view.live?.let { pressed[it.deviceId] } ?: emptySet()
 
     // Controller sheet. shownId keeps its content during the closing animation.
-    var openId by rememberSaveable { mutableStateOf(initiallyOpen?.takeIf { it != OPEN_SETTINGS && it != OPEN_ORDER }) }
+    var openId by rememberSaveable { mutableStateOf(initiallyOpen?.takeIf { it != OPEN_SETTINGS && it != OPEN_ORDER && it != OPEN_HEADPHONES }) }
     var shownId by rememberSaveable { mutableStateOf(openId) }
     var settingsOpen by rememberSaveable { mutableStateOf(initiallyOpen == OPEN_SETTINGS) }
     val openView = views.firstOrNull { it.id == openId }
@@ -165,6 +189,7 @@ fun MainScreen(
     var permissionTick by remember { mutableIntStateOf(0) }
     var askedHere by remember { mutableStateOf(false) }
     val nearbyGranted = remember(resumeTick, permissionTick) { Permissions.hasBluetoothConnect(context) }
+    LaunchedEffect(nearbyGranted) { if (nearbyGranted) headphones.refresh() }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         permissionTick++
         if (source.live.value.isNotEmpty()) LightKeeperService.ensureRunning(context)
@@ -202,16 +227,13 @@ fun MainScreen(
     }
     BackHandler(enabled = ordering != null) { source.stopOrdering() }
 
-    // Reordering connected controllers by dragging.
-    val pitch = with(LocalDensity.current) { (CellHeight + CellGap).toPx() }
+    // Reordering connected controllers by dragging: up and down in the list, also across in the
+    // grid. Only numbered controllers can be dragged: their numbers follow the order.
     val connectedIds = views.filter { it.isConnected }.map { it.id }
-    // Only numbered controllers can be dragged: their numbers follow the order.
     val draggableIds = views.filter { it.isConnected && it.profile.number > 0 }.map { it.id }
-    val latestConnectedIds by rememberUpdatedState(draggableIds)
+    val latestDraggableIds by rememberUpdatedState(draggableIds)
     var dragId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    val dragFrom = draggableIds.indexOf(dragId)
-    val dragTo = if (dragFrom < 0) -1 else (dragFrom + (dragOffset / pitch).roundToInt()).coerceIn(0, draggableIds.lastIndex)
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
     // Where each connected controller's light is on screen; read while drawing, so scrolling
     // only redraws the background.
@@ -237,117 +259,188 @@ fun MainScreen(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(CellGap),
             ) {
                 Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                Spacer(Modifier.height(TopBarHeight + 2.dp - CellGap))
+                Text(
+                    text = "Dualsense Manager",
+                    style = GlassType.largeTitle,
+                    modifier = Modifier.padding(start = 6.dp, top = 18.dp, bottom = 22.dp),
+                )
+
+                if (headphoneList.isNotEmpty()) {
+                    SectionLabel("Headphones")
+                    CellGrid(columns, CellGap, if (grid) null else CellHeight) {
+                        for (pair in headphoneList) {
+                            key(pair.address) {
+                                HeadphonesCell(
+                                    headphones = pair,
+                                    backdrop = background,
+                                    onOpen = {
+                                        openHeadphones = pair.address
+                                        shownHeadphones = pair.address
+                                    },
+                                    onStepNoise = {
+                                        pair.noise?.let { headphones.setNoise(pair.address, it.copy(mode = nextNoiseMode(it.mode))) }
+                                    },
+                                    square = grid,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(26.dp))
+                }
+
+                SectionLabel("Controllers")
                 if (views.isEmpty()) EmptyCell(background, onBluetooth = { openBluetoothSettings(context) })
 
                 @Composable
-                fun Cell(view: ControllerView, modifier: Modifier = Modifier) = ControllerCell(
-                    view = view,
-                    light = lightOf(view),
-                    backdrop = background,
-                    now = now,
-                    presses = view.live?.let { presses[it.deviceId] } ?: 0,
-                    onOpen = {
+                fun Cell(view: ControllerView, modifier: Modifier = Modifier) {
+                    val onOpen = {
                         openId = view.id
                         shownId = view.id
-                    },
-                    onFind = { source.identify(view.id) },
-                    onGlow = { glowAt[view.id] = it },
-                    modifier = modifier,
-                )
-
-                val order = ordering
-                if (order != null) {
-                    // One place per connected controller: those taken show it, the rest wait for
-                    // L2 + R2, lighting each trigger while a waiting controller holds it.
-                    val placed = order.joined.mapNotNull { id -> views.firstOrNull { it.id == id && it.isConnected } }
-                    val waiting = order.waiting(connectedIds)
-                    fun held(part: ControllerPart) = waiting.any { id ->
-                        val device = views.firstOrNull { it.id == id }?.live?.deviceId
-                        device != null && part in pressed[device].orEmpty()
                     }
-                    val heldL2 = held(ControllerPart.L2)
-                    val heldR2 = held(ControllerPart.R2)
-                    for (place in 0 until placed.size + waiting.size) {
-                        key("place-$place") {
-                            Crossfade(targetState = placed.getOrNull(place)?.id, label = "place") { id ->
-                                val view = views.firstOrNull { it.id == id }
-                                if (view != null) {
-                                    Cell(view)
-                                } else {
-                                    EmptySlot(
-                                        number = place + 1,
-                                        next = place == placed.size,
-                                        l2 = heldL2,
-                                        r2 = heldR2,
-                                        backdrop = background,
+                    val viewPresses = view.live?.let { presses[it.deviceId] } ?: 0
+                    if (grid) {
+                        ControllerCard(
+                            view = view,
+                            light = lightOf(view),
+                            backdrop = background,
+                            now = now,
+                            presses = viewPresses,
+                            onOpen = onOpen,
+                            onFind = { source.identify(view.id) },
+                            onGlow = { glowAt[view.id] = it },
+                            modifier = modifier,
+                        )
+                    } else {
+                        ControllerCell(
+                            view = view,
+                            light = lightOf(view),
+                            backdrop = background,
+                            now = now,
+                            presses = viewPresses,
+                            onOpen = onOpen,
+                            onFind = { source.identify(view.id) },
+                            onGlow = { glowAt[view.id] = it },
+                            modifier = modifier,
+                        )
+                    }
+                }
+
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val cellWidth = (maxWidth - CellGap * (columns - 1)) / columns
+                    val cellHeight = if (grid) cellWidth else CellHeight
+                    val density = LocalDensity.current
+                    val colPitch = with(density) { (cellWidth + CellGap).toPx() }
+                    val rowPitch = with(density) { (cellHeight + CellGap).toPx() }
+                    fun position(index: Int) = Offset((index % columns) * colPitch, (index / columns).toFloat() * rowPitch)
+                    fun target(ids: List<String>, from: Int, offset: Offset): Int {
+                        val down = (offset.y / rowPitch).roundToInt()
+                        val across = if (columns > 1) (offset.x / colPitch).roundToInt() else 0
+                        return (from + down * columns + across).coerceIn(0, ids.lastIndex)
+                    }
+                    val dragFrom = draggableIds.indexOf(dragId)
+                    val dragOrder = if (dragFrom < 0) draggableIds else Numbering.moved(draggableIds, dragFrom, target(draggableIds, dragFrom, dragOffset))
+
+                    CellGrid(columns, CellGap, if (grid) null else CellHeight) {
+                        val order = ordering
+                        if (order != null) {
+                            // One place per connected controller: those taken show it, the rest
+                            // wait for L2 + R2, lighting each trigger while a waiting controller
+                            // holds it.
+                            val placed = order.joined.mapNotNull { id -> views.firstOrNull { it.id == id && it.isConnected } }
+                            val waiting = order.waiting(connectedIds)
+                            fun held(part: ControllerPart) = waiting.any { id ->
+                                val device = views.firstOrNull { it.id == id }?.live?.deviceId
+                                device != null && part in pressed[device].orEmpty()
+                            }
+                            val heldL2 = held(ControllerPart.L2)
+                            val heldR2 = held(ControllerPart.R2)
+                            for (place in 0 until placed.size + waiting.size) {
+                                key("place-$place") {
+                                    Crossfade(targetState = placed.getOrNull(place)?.id, label = "place") { id ->
+                                        val view = views.firstOrNull { it.id == id }
+                                        if (view != null) {
+                                            Cell(view)
+                                        } else {
+                                            EmptySlot(
+                                                number = place + 1,
+                                                next = place == placed.size,
+                                                l2 = heldL2,
+                                                r2 = heldR2,
+                                                backdrop = background,
+                                                square = grid,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            for (view in views) {
+                                key(view.id) {
+                                    val index = draggableIds.indexOf(view.id)
+                                    val shift = if (dragId == null || index < 0 || view.id == dragId) {
+                                        Offset.Zero
+                                    } else {
+                                        position(dragOrder.indexOf(view.id)) - position(index)
+                                    }
+                                    val animatedShift by animateOffsetAsState(shift, tween(180), label = "reorder")
+                                    val dragging = view.id == dragId
+                                    Cell(
+                                        view = view,
+                                        modifier = Modifier
+                                            .zIndex(if (dragging) 1f else 0f)
+                                            .offset { (if (dragging) dragOffset else animatedShift).round() }
+                                            .scale(if (dragging) 1.03f else 1f)
+                                            .then(
+                                                if (index < 0) {
+                                                    Modifier
+                                                } else {
+                                                    Modifier.pointerInput(view.id, columns, colPitch, rowPitch) {
+                                                        detectDragGesturesAfterLongPress(
+                                                            onDragStart = {
+                                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                dragId = view.id
+                                                                dragOffset = Offset.Zero
+                                                            },
+                                                            onDrag = { change, amount ->
+                                                                change.consume()
+                                                                dragOffset += amount
+                                                            },
+                                                            onDragEnd = {
+                                                                val ids = latestDraggableIds
+                                                                val from = ids.indexOf(view.id)
+                                                                if (from >= 0) {
+                                                                    val to = target(ids, from, dragOffset)
+                                                                    if (to != from) source.reorder(Numbering.moved(ids, from, to))
+                                                                }
+                                                                dragId = null
+                                                                dragOffset = Offset.Zero
+                                                            },
+                                                            onDragCancel = {
+                                                                dragId = null
+                                                                dragOffset = Offset.Zero
+                                                            },
+                                                        )
+                                                    }
+                                                },
+                                            ),
                                     )
                                 }
                             }
                         }
                     }
-                } else {
-                    for (view in views) {
-                        key(view.id) {
-                            val index = draggableIds.indexOf(view.id)
-                            val shift = when {
-                                dragId == null || index < 0 || view.id == dragId -> 0f
-                                index in (dragFrom + 1)..dragTo -> -pitch
-                                index in dragTo until dragFrom -> pitch
-                                else -> 0f
-                            }
-                            val animatedShift by animateFloatAsState(shift, tween(180), label = "reorder")
-                            val dragging = view.id == dragId
-                            Cell(
-                                view = view,
-                                modifier = Modifier
-                                    .zIndex(if (dragging) 1f else 0f)
-                                    .offset { IntOffset(0, (if (dragging) dragOffset else animatedShift).roundToInt()) }
-                                    .scale(if (dragging) 1.03f else 1f)
-                                    .then(
-                                        if (index < 0) {
-                                            Modifier
-                                        } else {
-                                            Modifier.pointerInput(view.id) {
-                                                detectDragGesturesAfterLongPress(
-                                                    onDragStart = {
-                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        dragId = view.id
-                                                        dragOffset = 0f
-                                                    },
-                                                    onDrag = { change, amount ->
-                                                        change.consume()
-                                                        dragOffset += amount.y
-                                                    },
-                                                    onDragEnd = {
-                                                        val ids = latestConnectedIds
-                                                        val from = ids.indexOf(view.id)
-                                                        val to = (from + (dragOffset / pitch).roundToInt()).coerceIn(0, ids.lastIndex)
-                                                        if (from >= 0 && to != from) source.reorder(Numbering.moved(ids, from, to))
-                                                        dragId = null
-                                                        dragOffset = 0f
-                                                    },
-                                                    onDragCancel = {
-                                                        dragId = null
-                                                        dragOffset = 0f
-                                                    },
-                                                )
-                                            }
-                                        },
-                                    ),
-                            )
-                        }
-                    }
                 }
+                // Room to scroll the last cell above the bar.
+                Spacer(Modifier.height(BottomBarHeight + 34.dp))
                 Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
             }
         }
 
-        TopBar(
+        BottomBar(
             backdrop = content,
+            grid = grid,
+            onToggleLayout = { settings.setGrid(!grid) },
             showPermission = !nearbyGranted,
             onPermission = askAgain,
             onSettings = { settingsOpen = true },
@@ -355,8 +448,13 @@ fun MainScreen(
             canOrder = connectedIds.size >= 2,
             onOrder = source::startOrdering,
             onStopOrdering = source::stopOrdering,
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
+
+        GlassSheet(visible = openPhones != null, backdrop = content, onDismiss = { openHeadphones = null }) {
+            val pair = shownPhones
+            if (pair != null) HeadphonesSheetContent(pair, headphones, onClose = { openHeadphones = null })
+        }
 
         GlassSheet(visible = openView != null, backdrop = content, onDismiss = { openId = null }) {
             val view = shownView
@@ -408,13 +506,15 @@ fun MainScreen(
 }
 
 /**
- * Floating glass capsule: the app's name, and buttons for permissions (when missing), putting the
- * controllers in order (with two or more connected) and settings; while [ordering], only a button
- * to stop.
+ * Floating glass capsule at the bottom: buttons for the layout (list or grid), putting the
+ * controllers in order (with two or more connected), permissions (when missing) and settings;
+ * while ordering, only a button to stop.
  */
 @Composable
-private fun TopBar(
+private fun BottomBar(
     backdrop: Backdrop,
+    grid: Boolean,
+    onToggleLayout: () -> Unit,
     showPermission: Boolean,
     onPermission: () -> Unit,
     onSettings: () -> Unit,
@@ -428,38 +528,33 @@ private fun TopBar(
     GlassSurface(
         backdrop = backdrop,
         modifier = modifier
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .height(TopBarHeight),
+            .navigationBarsPadding()
+            .padding(bottom = 14.dp)
+            .height(BottomBarHeight),
         shape = CircleShape,
     ) {
         Row(
-            Modifier.fillMaxSize().padding(start = 22.dp, end = 7.dp),
+            modifier = Modifier.fillMaxHeight().padding(horizontal = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = "Dualsense Manager",
-                style = GlassType.headline.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
             if (ordering) {
                 GlassIconButton(onClick = onStopOrdering, label = "Done") {
                     CloseIcon(glass.textPrimary, Modifier.size(16.dp))
                 }
             } else {
+                GlassIconButton(onClick = onToggleLayout, label = if (grid) "Show as a list" else "Show as a grid") {
+                    if (grid) ListIcon(glass.textPrimary) else GridIcon(glass.textPrimary)
+                }
                 if (canOrder) {
                     GlassIconButton(onClick = onOrder, label = "Put the controllers in order") {
                         OrderIcon(glass.textPrimary, Modifier.size(21.dp))
                     }
-                    Spacer(Modifier.width(6.dp))
                 }
                 if (showPermission) {
                     GlassIconButton(onClick = onPermission, label = "Allow Nearby devices") {
                         BluetoothIcon(glass.danger, Modifier.size(18.dp))
                     }
-                    Spacer(Modifier.width(6.dp))
                 }
                 GlassIconButton(onClick = onSettings, label = "Settings") {
                     GearIcon(glass.textPrimary, Modifier.size(22.dp))

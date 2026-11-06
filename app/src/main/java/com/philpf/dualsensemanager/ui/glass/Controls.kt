@@ -9,6 +9,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +32,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -60,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.ui.theme.GlassType
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
 import com.philpf.dualsensemanager.ui.theme.contentColorOn
+import kotlin.math.roundToInt
 
 /** Flat capsule button: a solid [accent] fill when [primary], translucent otherwise. */
 @Composable
@@ -307,6 +312,66 @@ fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: Str
             size = Size(thumbW, thumbH),
             cornerRadius = CornerRadius(thumbH / 2f),
         )
+    }
+}
+
+/**
+ * Flat slider over whole steps of [range]: a translucent track that fills with the accent up to
+ * a white thumb. [onChange] follows the finger; [onDone] gets the value it was let go at.
+ */
+@Composable
+fun GlassSlider(
+    value: Int,
+    range: IntRange,
+    onChange: (Int) -> Unit,
+    onDone: (Int) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val glass = LocalGlass.current
+    val latestValue by rememberUpdatedState(value)
+    val latestChange by rememberUpdatedState(onChange)
+    val latestDone by rememberUpdatedState(onDone)
+    val steps = (range.last - range.first).coerceAtLeast(1)
+    fun valueAt(x: Float, width: Float): Int {
+        val fraction = ((x - 12.dp.value) / (width - 24.dp.value)).coerceIn(0f, 1f)
+        return range.first + (fraction * steps).roundToInt()
+    }
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(range) {
+                detectTapGestures { offset ->
+                    val v = valueAt(offset.x / density, size.width / density)
+                    latestChange(v)
+                    latestDone(v)
+                }
+            }
+            .pointerInput(range) {
+                detectHorizontalDragGestures(
+                    onDragEnd = { latestDone(latestValue) },
+                    onDragCancel = { latestDone(latestValue) },
+                ) { change, _ ->
+                    change.consume()
+                    val v = valueAt(change.position.x / density, size.width / density)
+                    if (v != latestValue) latestChange(v)
+                }
+            }
+            .semantics {
+                contentDescription = label
+                stateDescription = "$value"
+            },
+    ) {
+        val inset = 12.dp.toPx()
+        val trackHeight = 6.dp.toPx()
+        val y = size.height / 2f
+        val fraction = (value - range.first).toFloat() / steps
+        val thumbX = inset + (size.width - 2 * inset) * fraction
+        drawRoundRect(glass.track, topLeft = Offset(inset, y - trackHeight / 2f), size = Size(size.width - 2 * inset, trackHeight), cornerRadius = CornerRadius(trackHeight / 2f))
+        drawRoundRect(glass.accent, topLeft = Offset(inset, y - trackHeight / 2f), size = Size(thumbX - inset, trackHeight), cornerRadius = CornerRadius(trackHeight / 2f))
+        drawCircle(Color.Black.copy(alpha = 0.18f), radius = 11.5.dp.toPx(), center = Offset(thumbX, y + 1.dp.toPx()))
+        drawCircle(Color.White, radius = 11.dp.toPx(), center = Offset(thumbX, y))
     }
 }
 

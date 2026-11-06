@@ -61,13 +61,16 @@ lights and read its battery).
   number and colour.
 - **Light and dark, and a monospaced font**, in Settings.
 - **Headphones.** Sony headphones paired with the phone get their own section, above the
-  controllers: battery and noise control at a glance, and a button that steps the noise
-  control as the headphones' own does (noise cancelling, ambient sound, off). Their sheet
-  sets the ambient sound level and voice focus, picks an equalizer preset, and turns them
-  off. Built for the WH-XB910N; other headphones that speak either version of Sony's
-  protocol (such as the WH-1000XM3 to XM5) should work; earbuds are not read yet. When the
-  app cannot reach them, the card says why: the channel is busy (Sony's app holds it) or
-  they do not answer.
+  controllers: battery and noise control at a glance, a button that steps the noise
+  control as the headphones' own does (noise cancelling, ambient sound, off), and a wave
+  across the panel when they are used (their noise-control button, equalizer or volume),
+  as a controller's panel does when pressed. Their sheet has Disconnect and Turn off, the
+  noise control with the ambient sound level and voice focus, the media volume, and the
+  equalizer presets in one row; every row stays in place, faint when it does not apply, so
+  the sheet keeps its size. Built for the WH-XB910N; other headphones that speak either
+  version of Sony's protocol (such as the WH-1000XM3 to XM5) should work; earbuds are not
+  read yet. When the app cannot reach them, the card says why: the channel is busy (Sony's
+  app holds it) or they do not answer.
 - **List or grid.** The bar's first button shows the panels as a list, or as square cards in
   two columns; dragging and putting controllers in order work in both. The bar floats at the
   bottom, and the app's name scrolls away with the list.
@@ -159,7 +162,9 @@ redrawing.
 - **Headphones.** Sony's own app talks to its headphones over a Bluetooth RFCOMM channel,
   in a protocol Sony does not publish; this app speaks both its versions, written from the
   descriptions in [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) and
-  [Cans](https://github.com/unhingedpanda/cans) (no code taken; their test vectors are the
+  [Cans](https://github.com/unhingedpanda/cans), with facts about the WH-XB910N from
+  [MelodyLink](https://github.com/jerry-2009/MelodyLink) and
+  [BudsLink](https://github.com/maniacx/budslink) (no code taken; their test vectors are the
   tests in `core/SonyHeadphones`). A message is 0x3E, then type, sequence number, payload
   length and payload, a checksum (the sum of those bytes), and 0x3C, with those markers
   escaped inside. Each request waits for the headphones' acknowledgement, which gives the
@@ -167,9 +172,15 @@ redrawing.
   version 1's; the answer to the first request tells the version (4 bytes: 1; longer: 2),
   and it is asked again every 1.25 s, up to 8 times, as headphones often ignore it just
   after connecting. Version 2 headphones then tell their functions, which give the form of
-  their noise control (Cans' table); if they do not, both of Gadgetbridge's forms are asked
+  their noise control (Cans' table); when they give none, as the WH-XB910N's do, form 0x17
+  is asked (as MelodyLink does), and if nothing answers within a few seconds the other
+  forms are tried one at a time until one does. The form that answered is kept for next
+  time, and every change is read back, as the XB910N does not report changes it was asked
   for. The app opens the channel only while it is on screen, to headphones that are
-  connected; Sony's app, if open at the same time, may hold it.
+  connected; Sony's app, if open at the same time, may hold it. The volume is Android's
+  media volume, the headphones' own while they play the phone's sound; the app follows it
+  through Android's volume broadcast, and a change it did not make itself counts as the
+  headphones being used.
 - **Starting in the background.** `ConnectionReceiver` listens for Bluetooth connections;
   Android allows starting the light service from that broadcast.
 
@@ -207,8 +218,9 @@ Debug builds show sample controllers when started with
   battery rules and alerts, connection rule, storage format, colour maths, stick dead zone,
   icon choice, input descriptors. Unit-tested in `app/src/test`.
 - `device/` — `ControllerManager` (finds controllers, holds their light sessions, reads
-  batteries, rumbles), `ControllerDisconnect`, `InputHighlights` (buttons and sticks),
-  `AppIcon`, `ProfileStore` (controllers and players), `SettingsStore`.
+  batteries, rumbles), `HeadphonesManager` (Sony headphones), `DeviceDisconnect`,
+  `InputHighlights` (buttons and sticks), `AppIcon`, `ProfileStore` (controllers and
+  players), `SettingsStore`.
 - `tools/app_icons.py` — generates the launcher icons and their manifest aliases.
 - `service/` — the foreground service and notifications, the Bluetooth receiver, the
   Quick Settings tile. `widget/` — the home-screen widget.
@@ -220,8 +232,7 @@ Debug builds show sample controllers when started with
 - The controller drawing is adapted from `design/dualsense.svg` in
   [daidr/dualsense-tester](https://github.com/daidr/dualsense-tester), © 2023 Xuezhou
   Dai, MIT License (full notice in `ui/art/ControllerArt.kt`).
-- The headphones are drawn from the WH-1000XM4 illustration in
-  [Cans](https://github.com/unhingedpanda/cans) (`xm4.svg`), © 2026 Mohamed Emad, MIT
-  License (full notice in `ui/art/HeadphonesArt.kt`).
+- The headphones drawing is traced from a front photograph of the WH-XB910N: its outline
+  and main lines, with the left half mirrored.
 - The settings, delete and numbered-list icons follow Google's Material Icons (Apache License 2.0).
 - The app icon, widget tiles and notification use the outline of the controller drawing.

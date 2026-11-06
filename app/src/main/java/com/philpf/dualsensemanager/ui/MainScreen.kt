@@ -280,7 +280,7 @@ fun MainScreen(
                                         shownHeadphones = pair.address
                                     },
                                     onStepNoise = {
-                                        pair.noise?.let { headphones.setNoise(pair.address, it.copy(mode = nextNoiseMode(it.mode))) }
+                                        pair.noise?.let { headphones.setNoise(pair.address, it.copy(mode = it.nextMode())) }
                                     },
                                     square = grid,
                                 )

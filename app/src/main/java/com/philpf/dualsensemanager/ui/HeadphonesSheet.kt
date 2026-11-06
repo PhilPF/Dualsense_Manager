@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.HeadphonesProblem
 import com.philpf.dualsensemanager.core.NoiseMode
 import com.philpf.dualsensemanager.core.SonyEqualizer
 import com.philpf.dualsensemanager.device.HeadphonesSource
@@ -40,8 +41,6 @@ import com.philpf.dualsensemanager.ui.glass.SectionLabel
 import com.philpf.dualsensemanager.ui.glass.SegmentedControl
 import com.philpf.dualsensemanager.ui.theme.GlassType
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
-
-private val Modes = listOf(NoiseMode.NOISE_CANCELLING, NoiseMode.AMBIENT, NoiseMode.OFF)
 
 /**
  * A pair of headphones: battery, the noise control (noise cancelling, ambient sound with its
@@ -69,7 +68,9 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
 
     val status = when {
         !headphones.connected -> "Not connected"
-        !headphones.supported -> "This model speaks a newer version of Sony's protocol, not supported yet"
+        headphones.problem == HeadphonesProblem.CHANNEL ->
+            "Their control channel could not be opened. If Sony's app is running, close it; this app tries again every few seconds."
+        headphones.problem == HeadphonesProblem.NO_ANSWER -> "Connected, but they did not answer. Trying again every few seconds."
         !headphones.ready -> "Connecting…"
         else -> null
     }
@@ -93,10 +94,11 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
     if (noise != null) {
         Spacer(Modifier.height(24.dp))
         SectionLabel("Noise control")
+        val modes = noise.modes
         SegmentedControl(
-            options = listOf("Cancelling", "Ambient", "Off"),
-            selectedIndex = Modes.indexOf(noise.mode),
-            onSelect = { source.setNoise(headphones.address, noise.copy(mode = Modes[it])) },
+            options = modes.map(::modeLabel),
+            selectedIndex = modes.indexOf(noise.mode),
+            onSelect = { source.setNoise(headphones.address, noise.copy(mode = modes[it])) },
         )
         if (noise.mode == NoiseMode.AMBIENT) {
             // The level follows the finger; the headphones get it when let go.
@@ -153,4 +155,10 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
         textColor = glass.danger,
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+private fun modeLabel(mode: NoiseMode): String = when (mode) {
+    NoiseMode.NOISE_CANCELLING -> "Cancelling"
+    NoiseMode.AMBIENT -> "Ambient"
+    NoiseMode.OFF -> "Off"
 }

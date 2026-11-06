@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.HeadphonesProblem
 import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
 import com.philpf.dualsensemanager.ui.art.BatteryGlyph
@@ -108,7 +109,8 @@ private fun HeadphonesStatus(headphones: Headphones) {
     val glass = LocalGlass.current
     val status = when {
         !headphones.connected -> "Not connected"
-        !headphones.supported -> "Not supported yet"
+        headphones.problem == HeadphonesProblem.CHANNEL -> "Can't connect"
+        headphones.problem == HeadphonesProblem.NO_ANSWER -> "Not answering"
         !headphones.ready -> "Connecting…"
         else -> null
     }
@@ -129,13 +131,6 @@ private fun HeadphonesStatus(headphones: Headphones) {
             Text(noiseLabel(it), style = GlassType.callout, color = glass.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-}
-
-/** The mode after [mode], as the headphones' own button steps: noise cancelling, ambient sound, off. */
-fun nextNoiseMode(mode: NoiseMode): NoiseMode = when (mode) {
-    NoiseMode.NOISE_CANCELLING -> NoiseMode.AMBIENT
-    NoiseMode.AMBIENT -> NoiseMode.OFF
-    NoiseMode.OFF -> NoiseMode.NOISE_CANCELLING
 }
 
 fun noiseName(mode: NoiseMode): String = when (mode) {

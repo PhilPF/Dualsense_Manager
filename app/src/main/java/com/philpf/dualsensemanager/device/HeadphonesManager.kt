@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.philpf.dualsensemanager.Permissions
 import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.HeadphonesProblem
 import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
 import com.philpf.dualsensemanager.core.SonyCommands
@@ -71,6 +72,7 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
     private val profiles = HashMap<Int, BluetoothProfile>()
     private val links = HashMap<String, Link>()
     private val lastTry = HashMap<String, Long>()
+    private val problems = HashMap<String, HeadphonesProblem>()
     private var receiverOn = false
 
     private val receiver = object : BroadcastReceiver() {
@@ -95,8 +97,8 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
     override fun setNoise(address: String, control: NoiseControl) {
         handler.post {
             val link = links[address] ?: return@post
-            val wind = link.state.noise?.windVariant ?: control.windVariant
-            val next = control.copy(windVariant = wind)
+            // Written in the form the headphones use.
+            val next = control.copy(form = link.state.noise?.form ?: return@post)
             link.write(link.session.send(SonyCommands.setNoise(next)))
             link.update { it.copy(noise = next) }
         }
@@ -105,13 +107,18 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
     override fun setEqualizer(address: String, preset: SonyEqualizer) {
         handler.post {
             val link = links[address] ?: return@post
-            link.write(link.session.send(SonyCommands.setEqualizer(preset)))
+            val version = link.session.version ?: return@post
+            link.write(link.session.send(SonyCommands.setEqualizer(version, preset)))
             link.update { it.copy(equalizer = preset) }
         }
     }
 
     override fun powerOff(address: String) {
-        handler.post { links[address]?.let { it.write(it.session.send(SonyCommands.POWER_OFF)) } }
+        handler.post {
+            val link = links[address] ?: return@post
+            val version = link.session.version ?: return@post
+            link.write(link.session.send(SonyCommands.powerOff(version)))
+        }
     }
 
     // ---- Everything below runs on [thread]. ----
@@ -164,6 +171,7 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
         }
         for ((type, proxy) in profiles) adapter?.closeProfileProxy(type, proxy)
         profiles.clear()
+        lastTry.clear()
         // Keep showing them, as not connected.
         _headphones.value = _headphones.value.map { Headphones(it.address, it.name, connected = false) }
     }
@@ -192,6 +200,7 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
         for (address in links.keys.toList()) {
             if (address !in connected || paired.none { it.address == address }) links.remove(address)?.close()
         }
+        problems.keys.retainAll(connected)
         val now = System.currentTimeMillis()
         for (device in paired) {
             if (device.address !in connected || device.address in links) continue
@@ -200,7 +209,8 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
             links[device.address] = Link(device, nameOf(device)).also { it.open() }
         }
         _headphones.value = paired.map { device ->
-            links[device.address]?.state ?: Headphones(device.address, nameOf(device), connected = device.address in connected)
+            links[device.address]?.state
+                ?: Headphones(device.address, nameOf(device), connected = device.address in connected, problem = problems[device.address])
         }
     }
 
@@ -219,18 +229,28 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
     private inner class Link(private val device: BluetoothDevice, name: String) {
         val address: String = device.address
         val session = SonySession()
-        var state = Headphones(address, name, connected = true)
+        var state = Headphones(address, name, connected = true, problem = problems[address])
             private set
         private var socket: BluetoothSocket? = null
         private var closed = false
-        private var initRetries = 0
+        private var asked = 0
+        private var readyTicks = 0
 
         private val tick = object : Runnable {
             override fun run() {
                 if (closed) return
-                when {
-                    session.waiting -> write(session.timeout())
-                    session.version == null && initRetries++ < INIT_RETRIES -> write(session.retryInit())
+                if (session.version == null) {
+                    // The first request, asked again until answered.
+                    if (asked >= INIT_TRIES) {
+                        failed(HeadphonesProblem.NO_ANSWER)
+                        return
+                    }
+                    asked++
+                    write(session.restart())
+                } else {
+                    if (session.waiting) write(session.timeout())
+                    // Version 2 headphones that never told their functions: their noise control is asked for in both usual forms.
+                    if (session.version == 2 && ++readyTicks == GUESS_TICKS) write(session.guessNoise())
                 }
                 handler.postDelayed(this, TICK_MS)
             }
@@ -242,29 +262,14 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
         }
 
         fun open() {
-            val service = serviceOf(device) ?: run {
-                update { it.copy(supported = false) }
-                return
-            }
-            Thread({ run(service) }, "headphones-$address").start()
+            val services = servicesOf(device)
+            Thread({ run(services) }, "headphones-$address").start()
         }
 
-        /** Connects, then reads until the channel closes. Runs on its own thread. */
-        private fun run(service: UUID) {
-            var opening: BluetoothSocket? = null
-            val s = try {
-                device.createRfcommSocketToServiceRecord(service).also {
-                    opening = it
-                    it.connect()
-                }
-            } catch (e: IOException) {
-                Log.i(TAG, "Could not open the channel to $address", e)
-                opening?.let(::closeQuietly)
-                handler.post(::failed)
-                return
-            } catch (e: SecurityException) {
-                opening?.let(::closeQuietly)
-                handler.post(::failed)
+        /** Connects to the first of [services] that opens, then reads until the channel closes. Runs on its own thread. */
+        private fun run(services: List<UUID>) {
+            val s = services.firstNotNullOfOrNull(::connect) ?: run {
+                handler.post { failed(HeadphonesProblem.CHANNEL) }
                 return
             }
             handler.post {
@@ -273,6 +278,7 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
                     return@post
                 }
                 socket = s
+                asked = 1
                 write(session.start())
                 handler.postDelayed(tick, TICK_MS)
             }
@@ -297,14 +303,35 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
                     links.remove(address)
                     close()
                     scan()
+                    handler.postDelayed(::scan, RETRY_MS + SETTLE_MS)
                 }
             }
         }
 
-        /** The channel could not be opened (Sony's app may hold it): shown as connected, and tried again later. */
-        private fun failed() {
+        private fun connect(service: UUID): BluetoothSocket? {
+            var opening: BluetoothSocket? = null
+            return try {
+                device.createRfcommSocketToServiceRecord(service).also {
+                    opening = it
+                    it.connect()
+                }
+            } catch (e: IOException) {
+                Log.i(TAG, "Could not open $service on $address", e)
+                opening?.let(::closeQuietly)
+                null
+            } catch (e: SecurityException) {
+                opening?.let(::closeQuietly)
+                null
+            }
+        }
+
+        /** The channel could not be opened, or they did not answer: shown with [problem], and tried again later. */
+        private fun failed(problem: HeadphonesProblem) {
             if (links[address] !== this) return
+            Log.i(TAG, "$address: $problem")
+            problems[address] = problem
             links.remove(address)
+            close()
             scan()
             handler.postDelayed(::scan, RETRY_MS + SETTLE_MS)
         }
@@ -314,7 +341,11 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
             val (replies, event) = session.receive(message)
             write(replies)
             when (event) {
-                is SonyEvent.Ready -> update { it.copy(ready = event.version == 1, supported = event.version == 1) }
+                is SonyEvent.Ready -> {
+                    problems.remove(address)
+                    update { it.copy(ready = true, problem = null) }
+                }
+                is SonyEvent.Functions -> Unit
                 is SonyEvent.Battery -> update { it.copy(battery = event.level, charging = event.charging) }
                 // While noise cancelling they report level 0: keep the last one, for ambient sound.
                 is SonyEvent.Noise -> update { current ->
@@ -349,18 +380,19 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
         }
     }
 
-    /** The service to connect to: version 1's, which this app speaks; none when only version 2's is offered. */
-    private fun serviceOf(device: BluetoothDevice): UUID? {
+    /**
+     * The services to try, in turn: version 2's first (as Gadgetbridge and Cans do) unless only
+     * version 1's is offered. The version spoken is then told by the first answer.
+     */
+    private fun servicesOf(device: BluetoothDevice): List<UUID> {
         val offered = try {
             device.uuids.orEmpty().map { it.uuid.toString().uppercase() }
         } catch (e: SecurityException) {
             emptyList()
         }
-        return when {
-            SonyHeadphonesIds.SERVICE_V1 in offered || offered.isEmpty() -> UUID.fromString(SonyHeadphonesIds.SERVICE_V1)
-            SonyHeadphonesIds.SERVICE_V2 in offered -> null
-            else -> UUID.fromString(SonyHeadphonesIds.SERVICE_V1)
-        }
+        val v1 = UUID.fromString(SonyHeadphonesIds.SERVICE_V1)
+        val v2 = UUID.fromString(SonyHeadphonesIds.SERVICE_V2)
+        return if (SonyHeadphonesIds.SERVICE_V1 in offered && SonyHeadphonesIds.SERVICE_V2 !in offered) listOf(v1, v2) else listOf(v2, v1)
     }
 
     private fun closeQuietly(socket: BluetoothSocket) {
@@ -374,7 +406,11 @@ class HeadphonesManager(private val context: Context) : HeadphonesSource {
     private companion object {
         const val TAG = "HeadphonesManager"
         const val TICK_MS = 1_250L
-        const val INIT_RETRIES = 2
+        /** The first request is sent up to this many times, a tick apart (Cans: 8, 1.2 s apart). */
+        const val INIT_TRIES = 8
+
+        /** Ticks after the version is known before guessing the noise control's form. */
+        const val GUESS_TICKS = 4
         const val SETTLE_MS = 1_500L
         const val RETRY_MS = 10_000L
         const val DEFAULT_AMBIENT_LEVEL = 10

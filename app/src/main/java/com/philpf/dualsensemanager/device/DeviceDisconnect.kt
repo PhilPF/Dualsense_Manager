@@ -14,30 +14,30 @@ import android.os.Build
 import com.philpf.dualsensemanager.Permissions
 import com.philpf.dualsensemanager.core.InputDescriptors
 
-/** How asking to disconnect a controller ended. */
+/** How asking to disconnect a device ended. */
 sealed interface DisconnectResult {
-    /** Android is disconnecting it (the controller then turns off). */
+    /** Android is disconnecting it (a controller then turns off). */
     data object Done : DisconnectResult
 
-    /** The user did not let the app manage the controller. */
+    /** The user did not let the app manage the device. */
     data object Declined : DisconnectResult
 
     /**
-     * The app cannot do it itself; the system settings can, in one tap: the controller's own
-     * page when its Bluetooth [address] is known, otherwise the list of Bluetooth devices.
+     * The app cannot do it itself; the system settings can, in one tap: the device's own page
+     * when its Bluetooth [address] is known, otherwise the list of Bluetooth devices.
      */
     data class InSettings(val address: String?) : DisconnectResult
 }
 
 /**
- * Disconnects a controller on Bluetooth, which turns it off.
+ * Disconnects a controller (which turns it off) or headphones on Bluetooth.
  *
  * From Android 17 (API 37) an app may disconnect a device it is associated with through the
- * Companion Device Manager; the user approves that once per controller, in a system prompt.
- * Before, only system apps may, so the app leads to the controller's page in the system
- * settings instead, whose "Disconnect" button does it.
+ * Companion Device Manager; the user approves that once per device, in a system prompt.
+ * Before, only system apps may, so the app leads to the device's page in the system settings
+ * instead, whose "Disconnect" button does it.
  */
-class ControllerDisconnect(private val context: Context) {
+class DeviceDisconnect(private val context: Context) {
 
     private val companions: CompanionDeviceManager? = context.getSystemService(CompanionDeviceManager::class.java)
 
@@ -56,7 +56,19 @@ class ControllerDisconnect(private val context: Context) {
         askUser: (IntentSender) -> Unit,
         onResult: (DisconnectResult) -> Unit,
     ) {
-        val device = pairedDevice(descriptor, vendorId, productId) ?: return onResult(DisconnectResult.InSettings(null))
+        val device = pairedDevice { InputDescriptors.matches(vendorId, productId, it.address, descriptor) }
+            ?: return onResult(DisconnectResult.InSettings(null))
+        disconnect(device, askUser, onResult)
+    }
+
+    /** Disconnects the paired device with Bluetooth [address] (headphones), as [disconnect] above. */
+    fun disconnect(address: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
+        val device = pairedDevice { it.address.equals(address, ignoreCase = true) }
+            ?: return onResult(DisconnectResult.InSettings(address))
+        disconnect(device, askUser, onResult)
+    }
+
+    private fun disconnect(device: BluetoothDevice, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
         val companions = companions
         if (!direct || companions == null) return onResult(DisconnectResult.InSettings(device.address))
         val approved = companions.myAssociations.any { it.deviceMacAddress?.toString().equals(device.address, ignoreCase = true) }
@@ -80,13 +92,13 @@ class ControllerDisconnect(private val context: Context) {
         )
     }
 
-    /** The paired device whose address hashes to the controller's [descriptor]. */
+    /** The first paired device that [matches]. */
     @SuppressLint("MissingPermission") // BLUETOOTH_CONNECT is checked first.
-    private fun pairedDevice(descriptor: String, vendorId: Int, productId: Int): BluetoothDevice? {
+    private fun pairedDevice(matches: (BluetoothDevice) -> Boolean): BluetoothDevice? {
         if (!Permissions.hasBluetoothConnect(context)) return null
         val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter ?: return null
         return try {
-            adapter.bondedDevices?.firstOrNull { InputDescriptors.matches(vendorId, productId, it.address, descriptor) }
+            adapter.bondedDevices?.firstOrNull(matches)
         } catch (e: SecurityException) {
             null
         }

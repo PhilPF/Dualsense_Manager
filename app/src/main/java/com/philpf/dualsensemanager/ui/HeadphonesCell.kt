@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +28,7 @@ import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
 import com.philpf.dualsensemanager.ui.art.BatteryGlyph
 import com.philpf.dualsensemanager.ui.art.BoltIcon
+import com.philpf.dualsensemanager.ui.art.ControllerArtAspect
 import com.philpf.dualsensemanager.ui.art.HeadphonesArt
 import com.philpf.dualsensemanager.ui.glass.Backdrop
 import com.philpf.dualsensemanager.ui.glass.GlassIconButton
@@ -36,7 +39,9 @@ import com.philpf.dualsensemanager.ui.theme.LocalGlass
 /**
  * A pair of headphones, as a wide panel or a [square] card: their drawing (the cups lit while
  * noise cancelling or letting ambient sound in), their name, battery and noise control, and a
- * button that steps the noise control as their own button does.
+ * button that steps the noise control as their own button does. Each time [presses] grows
+ * (their button or touch panel was used), a wave floods the panel from the drawing, as a
+ * controller's does when pressed.
  */
 @Composable
 fun HeadphonesCell(
@@ -46,8 +51,10 @@ fun HeadphonesCell(
     onStepNoise: () -> Unit,
     modifier: Modifier = Modifier,
     square: Boolean = false,
+    presses: Int = 0,
 ) {
     val glass = LocalGlass.current
+    val waves = rememberPressWaves(presses)
     val ready = headphones.ready
     val noise = headphones.noise
     val glow = when (noise?.mode) {
@@ -85,14 +92,30 @@ fun HeadphonesCell(
         onClick = onOpen,
     ) {
         if (square) {
-            Column(Modifier.fillMaxSize().padding(14.dp)) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind {
+                        // From the middle of the drawing, below the content and inside the card.
+                        val pad = 14.dp.toPx()
+                        val artWidth = (size.width - 2 * pad) * 0.62f
+                        drawPressWaves(waves, Offset(pad + artWidth / 2f, pad + artWidth / ControllerArtAspect / 2f), glass.accent)
+                    }
+                    .padding(14.dp),
+            ) {
                 art(Modifier.fillMaxWidth(0.62f))
                 Spacer(Modifier.weight(1f))
                 text()
             }
             button(Modifier.align(Alignment.TopEnd).padding(10.dp))
         } else {
-            Row(Modifier.fillMaxSize().padding(start = 12.dp, end = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .drawBehind { drawPressWaves(waves, Offset(12.dp.toPx() + 56.dp.toPx(), size.height / 2f), glass.accent) }
+                    .padding(start = 12.dp, end = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 art(Modifier.width(112.dp))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) { text() }

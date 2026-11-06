@@ -91,8 +91,8 @@ class SonyHeadphonesTest {
         assertEquals(SonyEvent.Ready(1), SonyCommands.parse(hex("01:00:00:00")))
         assertEquals(SonyEvent.Battery(70, charging = true), SonyCommands.parse(hex("13:00:46:01")))
         assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.AMBIENT, 12, voiceFocus = true)), SonyCommands.parse(hex("67:02:01:00:00:01:01:0c")))
-        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 0, false, v1Wind)), SonyCommands.parse(hex("69:02:01:02:02:01:00:00")))
-        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.OFF, 5, false)), SonyCommands.parse(hex("69:02:00:00:00:01:00:05")))
+        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 0, false, v1Wind), notified = true), SonyCommands.parse(hex("69:02:01:02:02:01:00:00")))
+        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.OFF, 5, false), notified = true), SonyCommands.parse(hex("69:02:00:00:00:01:00:05")))
         assertEquals(SonyEvent.Equalizer(SonyEqualizer.BASS_BOOST), SonyCommands.parse(hex("57:01:16:06:0a:0a:0a:0a:0a:0a")))
         // A curve of its own (the WH-1000XM4 reports FF) is Manual.
         assertEquals(SonyEvent.Equalizer(SonyEqualizer.MANUAL), SonyCommands.parse(hex("57:01:ff:06:0a:0a:0a:0a:0a:0a")))
@@ -105,11 +105,11 @@ class SonyHeadphonesTest {
         assertEquals(SonyEvent.Battery(55, charging = false), SonyCommands.parse(hex("25:00:37:00")))
         // A framed equalizer notification from Gadgetbridge's tests.
         val frame = SonyFrames.decode(bytes("3e:0c:01:00:00:00:0a:59:00:16:06:11:0a:0a:0a:0a:0a:cf:3c"))!!
-        assertEquals(SonyEvent.Equalizer(SonyEqualizer.BASS_BOOST), SonyCommands.parse(frame.payload))
+        assertEquals(SonyEvent.Equalizer(SonyEqualizer.BASS_BOOST, notified = true), SonyCommands.parse(frame.payload))
         assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.AMBIENT, 20, false, v2)), SonyCommands.parse(hex("67:17:01:01:01:00:14")))
         val wind = NoiseForm(2, 0x15, windByte = true)
-        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 10, true, wind)), SonyCommands.parse(hex("69:15:01:01:00:02:01:0a")))
-        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 10, false, wind)), SonyCommands.parse(hex("69:15:01:01:00:03:00:0a")))
+        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 10, true, wind), notified = true), SonyCommands.parse(hex("69:15:01:01:00:02:01:0a")))
+        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 10, false, wind), notified = true), SonyCommands.parse(hex("69:15:01:01:00:03:00:0a")))
         assertEquals(
             SonyEvent.Noise(NoiseControl(NoiseMode.AMBIENT, 12, false, NoiseForm(2, 0x21, ncByte = false))),
             SonyCommands.parse(hex("67:21:01:01:00:0c")),
@@ -163,22 +163,73 @@ class SonyHeadphonesTest {
         assertEquals(listOf(ack(0)), frames(afterFunctions))
         assertEquals(listOf(command(1, SonyCommands.equalizer(2))), frames(session.receive(ack(1)).first))
         assertEquals(listOf(command(0, SonyCommands.noise(0x17))), frames(session.receive(ack(0)).first))
-        // Already asked: no guessing.
+        assertEquals(emptyList<ByteArray>(), session.receive(ack(1)).first)
+        // Read: nothing is guessed.
+        val (_, noise) = session.receive(command(0, hex("67:17:01:01:00:00:14")))
+        assertEquals(SonyEvent.Noise(NoiseControl(NoiseMode.NOISE_CANCELLING, 20, false, v2)), noise)
+        assertEquals(true, session.noiseKnown)
         assertEquals(emptyList<ByteArray>(), session.guessNoise())
     }
 
     @Test
-    fun withoutTheFunctionsBothFormsAreTried() {
+    fun functionsWithoutANoiseFunctionAskTheDefaultForm() {
+        // The WH-XB910N's functions give no noise form: MelodyLink's 17 is asked.
         val session = SonySession()
         session.start()
         session.receive(ack(1))
         session.receive(command(0, hex("01:00:00:00:00:00:00:00")))
-        // FUNCTIONS in flight: the guesses wait in line, 15 first.
+        session.receive(command(1, hex("07:00:02:10:00:22:00")))
+        session.receive(ack(0)) // functions acknowledged: battery
+        session.receive(ack(1)) // battery acknowledged: equalizer
+        assertEquals(listOf(command(0, SonyCommands.noise(0x17))), frames(session.receive(ack(0)).first))
+    }
+
+    @Test
+    fun aFormAnsweredBeforeIsAskedFirst() {
+        val session = SonySession(knownNoise = 0x15)
+        session.start()
+        session.receive(ack(1))
+        session.receive(command(0, hex("01:00:00:00:00:00:00:00")))
+        session.receive(ack(0)) // functions acknowledged: battery
+        session.receive(ack(1)) // battery acknowledged: equalizer
+        assertEquals(listOf(command(0, SonyCommands.noise(0x15))), frames(session.receive(ack(0)).first))
+    }
+
+    @Test
+    fun settingTheNoiseControlReadsItBack() {
+        val session = SonySession()
+        session.start()
+        session.receive(ack(1))
+        session.receive(command(0, hex("01:00:00:00:00:00:00:00")))
+        listOf(ack(0), ack(1), ack(0), ack(1)).forEach { session.receive(it) } // functions, battery, equalizer
+        val control = NoiseControl(NoiseMode.AMBIENT, 12, true, v2)
+        assertEquals(listOf(command(1, SonyCommands.setNoise(control))), frames(session.setNoise(control)))
+        assertEquals(listOf(command(0, SonyCommands.noise(0x17))), frames(session.receive(ack(0)).first))
+    }
+
+    @Test
+    fun answersAndNotificationsAreTold() {
+        assertEquals(false, (SonyCommands.parse(hex("67:17:01:01:00:00:14")) as SonyEvent.Noise).notified)
+        assertEquals(true, (SonyCommands.parse(hex("69:17:01:01:00:00:14")) as SonyEvent.Noise).notified)
+        assertEquals(false, (SonyCommands.parse(hex("57:00:16:06")) as SonyEvent.Equalizer).notified)
+        assertEquals(true, (SonyCommands.parse(hex("59:00:16:06")) as SonyEvent.Equalizer).notified)
+    }
+
+    @Test
+    fun withoutTheFunctionsTheFormsAreTriedInTurn() {
+        val session = SonySession()
+        session.start()
+        session.receive(ack(1))
+        session.receive(command(0, hex("01:00:00:00:00:00:00:00")))
+        // FUNCTIONS in flight: the guesses wait in line, 17 first, then 15.
         assertEquals(emptyList<ByteArray>(), session.guessNoise())
         session.receive(ack(0)) // battery
         session.receive(ack(1)) // equalizer
-        assertEquals(listOf(command(0, SonyCommands.noise(0x15))), frames(session.receive(ack(0)).first))
-        assertEquals(listOf(command(1, SonyCommands.noise(0x17))), frames(session.receive(ack(1)).first))
+        assertEquals(listOf(command(0, SonyCommands.noise(0x17))), frames(session.receive(ack(0)).first))
+        assertEquals(listOf(command(1, SonyCommands.noise(0x15))), frames(session.receive(ack(1)).first))
+        // 15 answers: the other forms are not asked.
+        session.receive(command(1, hex("67:15:01:01:00:02:00:0a")))
+        assertEquals(emptyList<ByteArray>(), session.receive(ack(0)).first)
     }
 
     @Test

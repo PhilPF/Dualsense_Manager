@@ -62,7 +62,7 @@ class ControllerManager(
 ) : ControllerSource {
 
     private val inputManager: InputManager = context.getSystemService(InputManager::class.java)
-    private val disconnector = ControllerDisconnect(context)
+    private val disconnector = DeviceDisconnect(context)
     private val usbManager: UsbManager? = context.getSystemService(UsbManager::class.java)
 
     private val thread = HandlerThread("controller-manager").apply { start() }

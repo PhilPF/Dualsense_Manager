@@ -1,5 +1,6 @@
 package com.philpf.dualsensemanager.device
 
+import android.content.IntentSender
 import com.philpf.dualsensemanager.core.Headphones
 import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
@@ -21,10 +22,14 @@ class DemoHeadphones : HeadphonesSource {
                 battery = 70,
                 noise = NoiseControl(NoiseMode.NOISE_CANCELLING, ambientLevel = 12, voiceFocus = true),
                 equalizer = SonyEqualizer.BASS_BOOST,
+                volume = 9,
+                maxVolume = 15,
             ),
         ),
     )
     override val headphones: StateFlow<List<Headphones>> = _headphones.asStateFlow()
+
+    override val interactions: StateFlow<Map<String, Int>> = MutableStateFlow(emptyMap<String, Int>()).asStateFlow()
 
     override fun refresh() = Unit
 
@@ -32,7 +37,14 @@ class DemoHeadphones : HeadphonesSource {
 
     override fun setEqualizer(address: String, preset: SonyEqualizer) = change(address) { it.copy(equalizer = preset) }
 
+    override fun setVolume(address: String, volume: Int) = change(address) { it.copy(volume = volume) }
+
     override fun powerOff(address: String) = change(address) { Headphones(it.address, it.name, connected = false) }
+
+    override fun disconnect(address: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
+        change(address) { Headphones(it.address, it.name, connected = false) }
+        onResult(DisconnectResult.Done)
+    }
 
     private fun change(address: String, transform: (Headphones) -> Headphones) {
         _headphones.update { list -> list.map { if (it.address == address) transform(it) else it } }

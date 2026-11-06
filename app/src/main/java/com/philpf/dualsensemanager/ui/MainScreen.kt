@@ -144,6 +144,7 @@ fun MainScreen(
     val sticks = input.sticks.collectAsState()
     val views = remember(profiles, players, live) { ControllerViews.build(profiles.values, players, live) }
     val headphoneList by headphones.headphones.collectAsState()
+    val headphoneUses by headphones.interactions.collectAsState()
     val storedGrid by settings.grid.collectAsState()
     val grid = forceGrid || storedGrid
     val columns = if (grid) 2 else 1
@@ -283,6 +284,7 @@ fun MainScreen(
                                         pair.noise?.let { headphones.setNoise(pair.address, it.copy(mode = it.nextMode())) }
                                     },
                                     square = grid,
+                                    presses = headphoneUses[pair.address] ?: 0,
                                 )
                             }
                         }
@@ -565,11 +567,12 @@ private fun BottomBar(
 }
 
 /**
- * The controller's own page in the system's Bluetooth settings (Android's Settings app), whose
- * "Disconnect" button turns it off. The list of Bluetooth devices instead when its [address] is
- * unknown or the page is missing (some makers' settings apps do not have it).
+ * A device's own page in the system's Bluetooth settings (Android's Settings app), whose
+ * "Disconnect" button disconnects it (a controller then turns off). The list of Bluetooth
+ * devices instead when its [address] is unknown or the page is missing (some makers' settings
+ * apps do not have it).
  */
-internal fun openControllerSettings(context: Context, address: String?) {
+internal fun openDeviceSettings(context: Context, address: String?) {
     val page = address?.let {
         Intent(ACTION_DEVICE_PAGE)
             .setPackage(SETTINGS_PACKAGE)

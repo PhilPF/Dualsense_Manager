@@ -111,7 +111,7 @@ fun ColumnScope.ControllerSheetContent(
                         source.disconnect(
                             view.id,
                             askUser = { approval.launch(IntentSenderRequest.Builder(it).build()) },
-                            onResult = { if (it is DisconnectResult.InSettings) openControllerSettings(context, it.address) },
+                            onResult = { if (it is DisconnectResult.InSettings) openDeviceSettings(context, it.address) },
                         )
                     },
                     icon = { PowerIcon(glass.textPrimary, Modifier.size(18.dp)) },
@@ -176,13 +176,13 @@ fun ColumnScope.ControllerSheetContent(
         onPreview = { source.preview(view.id, it) },
         onPick = { source.setColor(view.id, it) },
     )
-    if (view.player == null && view.profile.customColor) {
-        Spacer(Modifier.height(12.dp))
-        GlassButton(
-            text = "Automatic",
-            onClick = { source.useAutomaticColor(view.id) },
-            modifier = Modifier.fillMaxWidth(),
-            textColor = Color(OPAQUE or view.color).onGlass(glass),
-        )
-    }
+    // Always there, so the sheet keeps its size; it works while the colour was picked by hand.
+    Spacer(Modifier.height(12.dp))
+    GlassButton(
+        text = "Automatic",
+        onClick = { source.useAutomaticColor(view.id) },
+        modifier = Modifier.fillMaxWidth(),
+        textColor = Color(OPAQUE or view.color).onGlass(glass),
+        enabled = view.player == null && view.profile.customColor,
+    )
 }

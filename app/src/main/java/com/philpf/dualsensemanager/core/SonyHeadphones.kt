@@ -161,9 +161,11 @@ sealed interface SonyEvent {
 
     data class Battery(val level: Int, val charging: Boolean) : SonyEvent
 
-    data class Noise(val control: NoiseControl) : SonyEvent
+    /** The noise control; [notified] when they changed it themselves (their button), not as an answer. */
+    data class Noise(val control: NoiseControl, val notified: Boolean = false) : SonyEvent
 
-    data class Equalizer(val preset: SonyEqualizer) : SonyEvent
+    /** The equalizer preset; [notified] when it changed on their side, not as an answer. */
+    data class Equalizer(val preset: SonyEqualizer, val notified: Boolean = false) : SonyEvent
 }
 
 /** The payloads of both versions, and what the headphones send back. */
@@ -187,11 +189,21 @@ object SonyCommands {
 
     /**
      * Version 2: the noise control's inquiry byte for the [functions] a pair of headphones
-     * supports, the first of these that it has (as Cans finds it).
+     * supports, the first of these that it has (as Cans, BudsLink and MelodyLink find it); null
+     * when it has none of them, as the WH-XB910N.
      */
     fun noiseInquiry(functions: Set<Int>): Int? = NOISE_FUNCTIONS.firstOrNull { it.first in functions }?.second
 
     private val NOISE_FUNCTIONS = listOf(0x6D to 0x19, 0x6B to 0x17, 0x68 to 0x15, 0x67 to 0x22, 0x66 to 0x21)
+
+    /**
+     * Version 2: the inquiry to ask when the functions give none. MelodyLink's (it works with the
+     * WH-XB910N, whose functions give none), and Gadgetbridge's for newer headphones.
+     */
+    const val DEFAULT_NOISE_INQUIRY = 0x17
+
+    /** Version 2: the other inquiries, tried one at a time when the noise control has not been read. */
+    val NOISE_GUESSES = listOf(0x15, 0x13, 0x14, 0x19, 0x16, 0x18, 0x11, 0x12, 0x22, 0x21)
 
     fun setNoise(control: NoiseControl): List<Int> {
         val form = control.form
@@ -242,8 +254,15 @@ object SonyCommands {
             } else {
                 null
             }
-            0x67, 0x69 -> if (payload.size > 1 && payload[1] == 0x02) parseNoiseV1(payload) else parseNoiseV2(payload)
-            0x57, 0x59 -> if (payload.size >= 3 && payload[1] <= 0x01) SonyEvent.Equalizer(SonyEqualizer.fromCode(payload[2])) else null
+            0x67, 0x69 -> {
+                val control = if (payload.size > 1 && payload[1] == 0x02) parseNoiseV1(payload) else parseNoiseV2(payload)
+                control?.let { SonyEvent.Noise(it, notified = payload[0] == 0x69) }
+            }
+            0x57, 0x59 -> if (payload.size >= 3 && payload[1] <= 0x01) {
+                SonyEvent.Equalizer(SonyEqualizer.fromCode(payload[2]), notified = payload[0] == 0x59)
+            } else {
+                null
+            }
             else -> null
         }
     }
@@ -255,7 +274,7 @@ object SonyCommands {
         return SonyEvent.Functions(noiseInquiry(functions))
     }
 
-    private fun parseNoiseV1(p: List<Int>): SonyEvent.Noise? {
+    private fun parseNoiseV1(p: List<Int>): NoiseControl? {
         if (p.size != 8) return null
         val wind = p[3] == 0x02
         val mode = when {
@@ -267,7 +286,7 @@ object SonyCommands {
             else -> return null
         }
         if (p[6] > 1 || p[7] > 20) return null
-        return SonyEvent.Noise(NoiseControl(mode, p[7], p[6] == 1, NoiseForm(1, 0x02, windByte = wind)))
+        return NoiseControl(mode, p[7], p[6] == 1, NoiseForm(1, 0x02, windByte = wind))
     }
 
     /**
@@ -276,7 +295,7 @@ object SonyCommands {
      * wind-noise reduction), voice focus, the level, and two more bytes after inquiry 19. Read
      * by length, as the two descriptions differ on which inquiry carries the wind byte.
      */
-    private fun parseNoiseV2(p: List<Int>): SonyEvent.Noise? {
+    private fun parseNoiseV2(p: List<Int>): NoiseControl? {
         if (p.size !in 6..9) return null
         val extra = if (p[1] == 0x19) 2 else 0
         val tail = 2 + extra
@@ -298,7 +317,7 @@ object SonyCommands {
             windByte = middle == 2,
             extra = p.takeLast(extra),
         )
-        return SonyEvent.Noise(NoiseControl(mode, if (level in 0..20) level else 10, focus == 1, form))
+        return NoiseControl(mode, if (level in 0..20) level else 10, focus == 1, form)
     }
 }
 
@@ -306,16 +325,23 @@ object SonyCommands {
  * One conversation with a pair of headphones: the sequence number (0 or 1, the next one given
  * by each acknowledgement), acknowledging what they send, and one request at a time, each sent
  * when the previous one has been acknowledged. The first request asks which version they speak.
- * With version 1, the battery, noise control and equalizer are asked for next; with version 2,
- * first the supported functions, which tell how to ask for the noise control.
+ * With version 1, the battery, noise control and equalizer are asked for next. With version 2,
+ * the supported functions, battery and equalizer; the noise control is asked for in the form
+ * these headphones answered last time ([knownNoise]), the one their functions give or else
+ * [SonyCommands.DEFAULT_NOISE_INQUIRY], and, if none answers, in the others in turn
+ * ([guessNoise]).
  */
-class SonySession {
+class SonySession(private val knownNoise: Int? = null) {
     private var sequence = 0
     private val queue = ArrayDeque<List<Int>>()
     private var inFlight: List<Int>? = null
     private var tries = 0
-    private var noiseAsked = false
+    private val noiseAsked = HashSet<Int>()
     private var restarts = 0
+
+    /** Whether the noise control has been read (then no other form is tried). */
+    var noiseKnown = false
+        private set
 
     var version: Int? = null
         private set
@@ -362,34 +388,50 @@ class SonySession {
                 // Sent once the first request is acknowledged, with the sequence number that gives.
                 if (event.version == 1) {
                     queue.addLast(SonyCommands.battery(1))
-                    queue.addLast(SonyCommands.noise(0x02))
+                    askNoise(0x02)
                     queue.addLast(SonyCommands.equalizer(1))
-                    noiseAsked = true
                 } else {
                     queue.addLast(SonyCommands.FUNCTIONS)
                     queue.addLast(SonyCommands.battery(2))
                     queue.addLast(SonyCommands.equalizer(2))
+                    knownNoise?.let(::askNoise)
                 }
-                out += pump()
             }
-            event is SonyEvent.Functions && !noiseAsked -> {
-                noiseAsked = true
-                event.noiseInquiry?.let { out += send(SonyCommands.noise(it)) }
+            event is SonyEvent.Functions && !noiseKnown -> askNoise(event.noiseInquiry ?: SonyCommands.DEFAULT_NOISE_INQUIRY)
+            event is SonyEvent.Noise -> {
+                noiseKnown = true
+                // Read: the other forms still waiting to be tried are not needed.
+                val inquiry = event.control.form.inquiry
+                queue.removeAll { it.size == 2 && it[0] == NOISE_GET && it[1] != inquiry }
             }
         }
+        out += pump()
         return out to event
     }
 
     /**
-     * Version 2, when the supported functions never came: asks for the noise control in the
-     * two forms headphones with noise cancelling use; the one they answer is theirs.
+     * Version 2, when the noise control has not been read yet: asks in the forms not tried yet,
+     * the default first, one at a time; the first answer ends it.
      */
     fun guessNoise(): List<ByteArray> {
-        if (version != 2 || noiseAsked) return emptyList()
-        noiseAsked = true
-        // Gadgetbridge's two: 15 for most, 17 for those with wind-noise reduction.
-        queue.addLast(SonyCommands.noise(0x15))
-        return send(SonyCommands.noise(0x17))
+        if (version != 2 || noiseKnown) return emptyList()
+        askNoise(SonyCommands.DEFAULT_NOISE_INQUIRY)
+        SonyCommands.NOISE_GUESSES.forEach(::askNoise)
+        return pump()
+    }
+
+    /**
+     * Sets the noise control, then reads it back: some headphones (the WH-XB910N, says
+     * MelodyLink) do not report a change they were asked for.
+     */
+    fun setNoise(control: NoiseControl): List<ByteArray> {
+        queue.addLast(SonyCommands.setNoise(control))
+        queue.addLast(SonyCommands.noise(control.form.inquiry))
+        return pump()
+    }
+
+    private fun askNoise(inquiry: Int) {
+        if (noiseAsked.add(inquiry)) queue.addLast(SonyCommands.noise(inquiry))
     }
 
     /**
@@ -416,6 +458,7 @@ class SonySession {
 
     private companion object {
         const val MAX_TRIES = 3
+        const val NOISE_GET = 0x66
     }
 }
 
@@ -434,6 +477,10 @@ data class Headphones(
     val charging: Boolean = false,
     val noise: NoiseControl? = null,
     val equalizer: SonyEqualizer? = null,
+    /** The phone's media volume, theirs while they play the phone's sound; null otherwise. */
+    val volume: Int? = null,
+    /** The highest media volume. */
+    val maxVolume: Int = 0,
 )
 
 /** Why the app cannot talk to a pair of connected headphones. */

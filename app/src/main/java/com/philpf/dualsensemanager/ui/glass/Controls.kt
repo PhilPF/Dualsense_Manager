@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -66,6 +67,9 @@ import com.philpf.dualsensemanager.ui.theme.LocalGlass
 import com.philpf.dualsensemanager.ui.theme.contentColorOn
 import kotlin.math.roundToInt
 
+/** How faint a control is while it cannot be used (it keeps its place, so nothing moves). */
+private const val DISABLED_ALPHA = 0.38f
+
 /** Flat capsule button: a solid [accent] fill when [primary], translucent otherwise. */
 @Composable
 fun GlassButton(
@@ -76,15 +80,17 @@ fun GlassButton(
     accent: Color = LocalGlass.current.accent,
     textColor: Color? = null,
     icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
 ) {
     val glass = LocalGlass.current
     val fill = if (primary) accent else glass.controlFill
     Row(
         modifier = modifier
             .defaultMinSize(minHeight = 44.dp)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
             .background(fill)
-            .clickable(role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -236,33 +242,37 @@ fun GlassChip(
     }
 }
 
-/** Capsule segmented control; a lighter pill slides to the selected option. */
+/** Capsule segmented control; a lighter pill slides to the selected option (none while [selectedIndex] is -1). */
 @Composable
 fun SegmentedControl(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val glass = LocalGlass.current
-    val position by animateFloatAsState(selectedIndex.toFloat(), tween(240), label = "segment")
+    val position by animateFloatAsState(selectedIndex.coerceAtLeast(0).toFloat(), tween(240), label = "segment")
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(40.dp)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
             .background(glass.controlFill)
             .padding(3.dp),
     ) {
         val segment = maxWidth / options.size
-        Box(
-            Modifier
-                .offset(x = segment * position)
-                .width(segment)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(glass.controlFillSelected),
-        )
+        if (selectedIndex >= 0) {
+            Box(
+                Modifier
+                    .offset(x = segment * position)
+                    .width(segment)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(glass.controlFillSelected),
+            )
+        }
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEachIndexed { index, option ->
                 Box(
@@ -270,7 +280,7 @@ fun SegmentedControl(
                         .weight(1f)
                         .fillMaxHeight()
                         .clip(CircleShape)
-                        .clickable(role = Role.Tab) { onSelect(index) }
+                        .clickable(enabled = enabled, role = Role.Tab) { onSelect(index) }
                         .semantics { selected = index == selectedIndex },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -287,15 +297,22 @@ fun SegmentedControl(
 
 /** Flat switch: a translucent track that fills with the accent when on, white capsule thumb. */
 @Composable
-fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) {
+fun GlassSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
     val glass = LocalGlass.current
     val progress by animateFloatAsState(if (checked) 1f else 0f, tween(200), label = "switch")
     val track by animateColorAsState(if (checked) glass.accent else glass.track, tween(200), label = "switchTrack")
     Canvas(
         modifier = modifier
             .size(width = 52.dp, height = 32.dp)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clip(CircleShape)
-            .clickable(role = Role.Switch) { onCheckedChange(!checked) }
+            .clickable(enabled = enabled, role = Role.Switch) { onCheckedChange(!checked) }
             .semantics {
                 contentDescription = label
                 stateDescription = if (checked) "On" else "Off"
@@ -327,6 +344,7 @@ fun GlassSlider(
     onDone: (Int) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val glass = LocalGlass.current
     val latestValue by rememberUpdatedState(value)
@@ -341,14 +359,17 @@ fun GlassSlider(
         modifier = modifier
             .fillMaxWidth()
             .height(32.dp)
-            .pointerInput(range) {
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
+            .pointerInput(range, enabled) {
+                if (!enabled) return@pointerInput
                 detectTapGestures { offset ->
                     val v = valueAt(offset.x / density, size.width / density)
                     latestChange(v)
                     latestDone(v)
                 }
             }
-            .pointerInput(range) {
+            .pointerInput(range, enabled) {
+                if (!enabled) return@pointerInput
                 detectHorizontalDragGestures(
                     onDragEnd = { latestDone(latestValue) },
                     onDragCancel = { latestDone(latestValue) },

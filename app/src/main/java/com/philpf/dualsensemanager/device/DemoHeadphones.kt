@@ -1,6 +1,7 @@
 package com.philpf.dualsensemanager.device
 
 import android.content.IntentSender
+import com.philpf.dualsensemanager.core.EqPreset
 import com.philpf.dualsensemanager.core.Headphones
 import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
@@ -21,7 +22,8 @@ class DemoHeadphones : HeadphonesSource {
                 ready = true,
                 battery = 70,
                 noise = NoiseControl(NoiseMode.NOISE_CANCELLING, ambientLevel = 12, voiceFocus = true),
-                equalizer = SonyEqualizer.BASS_BOOST,
+                equalizer = SonyEqualizer.BASS_BOOST.preset,
+                presets = SonyEqualizer.presets,
                 volume = 9,
                 maxVolume = 15,
             ),
@@ -35,14 +37,14 @@ class DemoHeadphones : HeadphonesSource {
 
     override fun setNoise(address: String, control: NoiseControl) = change(address) { it.copy(noise = control) }
 
-    override fun setEqualizer(address: String, preset: SonyEqualizer) = change(address) { it.copy(equalizer = preset) }
+    override fun setEqualizer(address: String, preset: EqPreset) = change(address) { it.copy(equalizer = preset) }
 
     override fun setVolume(address: String, volume: Int) = change(address) { it.copy(volume = volume) }
 
-    override fun powerOff(address: String) = change(address) { Headphones(it.address, it.name, connected = false) }
+    override fun powerOff(address: String) = change(address) { Headphones(it.address, it.name, connected = false, kind = it.kind) }
 
     override fun disconnect(address: String, askUser: (IntentSender) -> Unit, onResult: (DisconnectResult) -> Unit) {
-        change(address) { Headphones(it.address, it.name, connected = false) }
+        change(address) { Headphones(it.address, it.name, connected = false, kind = it.kind) }
         onResult(DisconnectResult.Done)
     }
 

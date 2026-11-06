@@ -4,7 +4,8 @@ An Android app for telling apart the PS5 controllers (DualSense and DualSense Ed
 connected to a phone or tablet. Each controller gets its own light-bar colour, a number
 and its player lights, and the app shows its battery, whether it is charging, and whether
 it is connected over Bluetooth or a USB cable. It also controls Sony headphones (built for
-the WH-XB910N): battery, noise cancelling and ambient sound, and the equalizer.
+the WH-XB910N) and OnePlus earbuds (built for the Buds Pro 2): battery, noise cancelling and
+ambient sound or transparency, and the equalizer.
 
 Requires **Android 12 or newer** (the first version that lets apps set a controller's
 lights and read its battery).
@@ -71,6 +72,10 @@ lights and read its battery).
   version of Sony's protocol (such as the WH-1000XM3 to XM5) should work; earbuds are not
   read yet. When the app cannot reach them, the card says why: the channel is busy (Sony's
   app holds it) or they do not answer.
+  OnePlus earbuds (built for the Buds Pro 2) show each bud's battery and the case's, noise
+  cancelling at its four strengths (Smart, Extreme, Moderate, Mild), transparency or off,
+  and the equalizer presets; their panel waves at a tap, squeeze or swipe on a bud. They
+  have no Turn off: they turn off in their case. They use the headphones' drawing for now.
 - **List or grid.** The bar's first button shows the panels as a list, or as square cards in
   two columns; dragging and putting controllers in order work in both. The bar floats at the
   bottom, and the app's name scrolls away with the list.
@@ -181,6 +186,20 @@ redrawing.
   media volume, the headphones' own while they play the phone's sound; the app follows it
   through Android's volume broadcast, and a change it did not make itself counts as the
   headphones being used.
+- **OnePlus earbuds.** HeyMelody, OnePlus's app, speaks to its earbuds over RFCOMM too, in
+  a protocol of its own (OPPO's and realme's earbuds speak it as well), written here from
+  [MacMelody](https://github.com/Omraj09/MacMelody)'s description (MIT), with facts checked
+  against [QuickBuds](https://github.com/spizganed/QuickBuds) and BudsLink (no code taken;
+  QuickBuds' captured frames are the tests in `core/OnePlusBuds`). A message is 0xAA, its
+  length (LEB128), two zero bytes, the command (2 bytes, little-endian), a sequence number
+  the reply repeats (0xFF in pushes), the payload's length and the payload; a reply sets
+  bit 15 of the command. On connecting (after 300 ms, as HeyMelody waits): the handshake,
+  the product id (062014 is the Buds Pro 2), the events offered, of which battery,
+  wearing, noise control and gestures are asked for (without that the buds report no
+  change made on them), then the noise control, battery and equalizer. The buds' own
+  requests (the time, and three questions about the phone) are answered, as some reset
+  the link otherwise. The noise control is set with one bit and reported in another table;
+  each change is read back.
 - **Starting in the background.** `ConnectionReceiver` listens for Bluetooth connections;
   Android allows starting the light service from that broadcast.
 
@@ -234,5 +253,7 @@ Debug builds show sample controllers when started with
   Dai, MIT License (full notice in `ui/art/ControllerArt.kt`).
 - The headphones drawing is traced from a front photograph of the WH-XB910N: its outline
   and main lines, with the left half mirrored.
+- The OnePlus earbuds' protocol follows [MacMelody](https://github.com/Omraj09/MacMelody)'s
+  description, © 2026 Omraj Sawant, MIT License (credited in `core/OnePlusBuds.kt`).
 - The settings, delete and numbered-list icons follow Google's Material Icons (Apache License 2.0).
 - The app icon, widget tiles and notification use the outline of the controller drawing.

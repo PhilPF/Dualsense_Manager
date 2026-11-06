@@ -91,8 +91,6 @@ class SonyFrameReader {
     }
 }
 
-enum class NoiseMode { NOISE_CANCELLING, AMBIENT, OFF }
-
 /**
  * How a pair of headphones writes its noise control, learned from what they send. Version 1:
  * inquiry 0x02, with or without the wind-noise setting (the WH-1000XM4 has it). Version 2: the
@@ -107,25 +105,6 @@ data class NoiseForm(
     val windByte: Boolean = false,
     val extra: List<Int> = emptyList(),
 )
-
-/**
- * The noise control: [mode]; the ambient sound level, 0 to 20, kept while noise cancelling so
- * it comes back with ambient sound; whether ambient sound focuses on voices; and the [form] the
- * headphones write it in.
- */
-data class NoiseControl(
-    val mode: NoiseMode,
-    val ambientLevel: Int,
-    val voiceFocus: Boolean,
-    val form: NoiseForm = NoiseForm(),
-) {
-    /** The modes these headphones have, in the order their button steps through them. */
-    val modes: List<NoiseMode>
-        get() = if (form.ncByte) NoiseMode.entries else listOf(NoiseMode.AMBIENT, NoiseMode.OFF)
-
-    /** The mode after this one, as their button steps. */
-    fun nextMode(): NoiseMode = modes[(modes.indexOf(mode) + 1) % modes.size]
-}
 
 enum class SonyEqualizer(val code: Int, val label: String) {
     OFF(0x00, "Off"),
@@ -145,9 +124,14 @@ enum class SonyEqualizer(val code: Int, val label: String) {
     /** Presets that can be chosen as they are (the others need their bands set in Sony's app). */
     val selectable: Boolean get() = code < 0xA0
 
+    val preset: EqPreset get() = EqPreset(code, label, selectable)
+
     companion object {
         /** Any other value (the WH-1000XM4 reports FF) is a curve of its own, shown as Manual. */
         fun fromCode(code: Int): SonyEqualizer = entries.firstOrNull { it.code == code } ?: MANUAL
+
+        /** The presets that can be chosen. */
+        val presets: List<EqPreset> = entries.filter { it.selectable }.map { it.preset }
     }
 }
 
@@ -460,36 +444,6 @@ class SonySession(private val knownNoise: Int? = null) {
         const val MAX_TRIES = 3
         const val NOISE_GET = 0x66
     }
-}
-
-/** A pair of Sony headphones paired with the phone, and what is known about them now. */
-data class Headphones(
-    /** Their Bluetooth address, which identifies them. */
-    val address: String,
-    val name: String,
-    /** Connected to the phone. */
-    val connected: Boolean,
-    /** The app is talking to them, so the controls below are theirs. */
-    val ready: Boolean = false,
-    /** Why the app cannot talk to them, while connected; null when it can, or is trying. */
-    val problem: HeadphonesProblem? = null,
-    val battery: Int? = null,
-    val charging: Boolean = false,
-    val noise: NoiseControl? = null,
-    val equalizer: SonyEqualizer? = null,
-    /** The phone's media volume, theirs while they play the phone's sound; null otherwise. */
-    val volume: Int? = null,
-    /** The highest media volume. */
-    val maxVolume: Int = 0,
-)
-
-/** Why the app cannot talk to a pair of connected headphones. */
-enum class HeadphonesProblem {
-    /** Their control channel could not be opened: Sony's app may be holding it. */
-    CHANNEL,
-
-    /** The channel opened, but they did not answer. */
-    NO_ANSWER,
 }
 
 /** How to recognise Sony headphones among paired devices. */

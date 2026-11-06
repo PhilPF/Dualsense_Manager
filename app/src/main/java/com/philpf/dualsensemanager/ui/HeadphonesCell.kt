@@ -22,7 +22,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.philpf.dualsensemanager.core.BudPart
 import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.HeadphonesKind
 import com.philpf.dualsensemanager.core.HeadphonesProblem
 import com.philpf.dualsensemanager.core.NoiseControl
 import com.philpf.dualsensemanager.core.NoiseMode
@@ -85,8 +87,13 @@ fun HeadphonesCell(
     }
     val button = @Composable { buttonModifier: Modifier ->
         if (ready && noise != null) {
-            GlassIconButton(onClick = onStepNoise, label = "Noise control: ${noiseName(noise.mode)}", size = if (square) 38.dp else 42.dp, modifier = buttonModifier) {
-                Text(noiseShort(noise.mode), style = GlassType.caption.copy(fontWeight = FontWeight.SemiBold), color = glass.textPrimary)
+            GlassIconButton(
+                onClick = onStepNoise,
+                label = "Noise control: ${noiseName(noise.mode, headphones.kind)}",
+                size = if (square) 38.dp else 42.dp,
+                modifier = buttonModifier,
+            ) {
+                Text(noiseShort(noise.mode, headphones.kind), style = GlassType.caption.copy(fontWeight = FontWeight.SemiBold), color = glass.textPrimary)
             }
         }
     }
@@ -148,35 +155,47 @@ private fun HeadphonesStatus(headphones: Headphones) {
         return
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        val battery = headphones.battery
-        if (battery != null) {
-            val low = battery <= 15 && !headphones.charging
+        // Earbuds: each bud's level, the glyph showing the lower; headphones: their one battery.
+        val buds = headphones.parts.filter { it.part != BudPart.CASE }
+        val level = buds.minOfOrNull { it.level } ?: headphones.battery
+        val charging = if (buds.isEmpty()) headphones.charging else buds.any { it.charging }
+        if (level != null) {
+            val low = level <= 15 && !charging
             val ink = if (low) glass.danger else glass.textPrimary
-            BatteryGlyph(fraction = battery / 100f, tint = ink.copy(alpha = 0.75f), fill = if (headphones.charging) glass.charging else ink)
-            Text("$battery%", style = GlassType.callout, color = ink, maxLines = 1)
-            if (headphones.charging) BoltIcon(glass.charging, Modifier.size(15.dp))
+            BatteryGlyph(fraction = level / 100f, tint = ink.copy(alpha = 0.75f), fill = if (charging) glass.charging else ink)
+            val text = if (buds.isEmpty()) "$level%" else buds.joinToString("  ") { "${partName(it.part)} ${it.level}%" }
+            Text(text, style = GlassType.callout, color = ink, maxLines = 1)
+            if (charging) BoltIcon(glass.charging, Modifier.size(15.dp))
         }
         headphones.noise?.let {
-            Text(noiseLabel(it), style = GlassType.callout, color = glass.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(noiseLabel(it, headphones.kind), style = GlassType.callout, color = glass.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-fun noiseName(mode: NoiseMode): String = when (mode) {
+/** The mode's name: Sony's "Ambient sound" is OnePlus's "Transparency". */
+fun noiseName(mode: NoiseMode, kind: HeadphonesKind): String = when (mode) {
     NoiseMode.NOISE_CANCELLING -> "Noise cancelling"
-    NoiseMode.AMBIENT -> "Ambient sound"
+    NoiseMode.AMBIENT -> if (kind == HeadphonesKind.ONEPLUS) "Transparency" else "Ambient sound"
     NoiseMode.OFF -> "Off"
 }
 
-private fun noiseShort(mode: NoiseMode): String = when (mode) {
+private fun noiseShort(mode: NoiseMode, kind: HeadphonesKind): String = when (mode) {
     NoiseMode.NOISE_CANCELLING -> "NC"
-    NoiseMode.AMBIENT -> "AMB"
+    NoiseMode.AMBIENT -> if (kind == HeadphonesKind.ONEPLUS) "TRN" else "AMB"
     NoiseMode.OFF -> "OFF"
 }
 
-/** "Noise cancelling", "Ambient 12", "Noise control off". */
-private fun noiseLabel(control: NoiseControl): String = when (control.mode) {
+/** "Noise cancelling", "Ambient 12", "Transparency", "Noise control off". */
+private fun noiseLabel(control: NoiseControl, kind: HeadphonesKind): String = when (control.mode) {
     NoiseMode.NOISE_CANCELLING -> "Noise cancelling"
-    NoiseMode.AMBIENT -> "Ambient ${control.ambientLevel}"
+    NoiseMode.AMBIENT -> if (kind == HeadphonesKind.ONEPLUS) "Transparency" else "Ambient ${control.ambientLevel}"
     NoiseMode.OFF -> "Noise control off"
+}
+
+/** L, R, Case. */
+fun partName(part: BudPart): String = when (part) {
+    BudPart.LEFT -> "L"
+    BudPart.RIGHT -> "R"
+    BudPart.CASE -> "Case"
 }

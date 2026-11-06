@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,14 +27,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.philpf.dualsensemanager.core.Headphones
+import com.philpf.dualsensemanager.core.HeadphonesKind
 import com.philpf.dualsensemanager.core.HeadphonesProblem
 import com.philpf.dualsensemanager.core.NoiseMode
-import com.philpf.dualsensemanager.core.SonyEqualizer
+import com.philpf.dualsensemanager.core.NoiseStrength
 import com.philpf.dualsensemanager.device.DisconnectResult
 import com.philpf.dualsensemanager.device.HeadphonesSource
 import com.philpf.dualsensemanager.ui.art.BatteryGlyph
@@ -52,10 +56,11 @@ import com.philpf.dualsensemanager.ui.theme.GlassType
 import com.philpf.dualsensemanager.ui.theme.LocalGlass
 
 /**
- * A pair of headphones: battery; Disconnect and Turn off; the noise control (noise cancelling,
- * ambient sound with its level and voice focus, or off); the volume; and the equalizer's
- * presets, in one row. Every row is always there, faint while it cannot be used, so the sheet
- * keeps its size whatever is chosen.
+ * A pair of headphones or earbuds: battery (each bud's and the case's for earbuds); Disconnect,
+ * and Turn off for Sony headphones; the noise control (noise cancelling, ambient sound or
+ * transparency, or off) with Sony's ambient level and voice focus, or how strongly OnePlus
+ * earbuds cancel noise; the volume; and the equalizer's presets, in one row. Every row is always
+ * there, faint while it cannot be used, so the sheet keeps its size whatever is chosen.
  */
 @Composable
 fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: HeadphonesSource, onClose: () -> Unit) {
@@ -63,6 +68,7 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
     val context = LocalContext.current
     val address = headphones.address
     val noise = headphones.noise
+    val oneplus = headphones.kind == HeadphonesKind.ONEPLUS
     // The system's "let this app manage the headphones" prompt (Android 17 and later).
     val approval = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
 
@@ -87,7 +93,8 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
     val status = when {
         !headphones.connected -> "Not connected"
         headphones.problem == HeadphonesProblem.CHANNEL ->
-            "Their control channel could not be opened. If Sony's app is running, close it; this app tries again every 10 seconds or so."
+            "Their control channel could not be opened. If ${if (oneplus) "HeyMelody" else "Sony's app"} is running, close it; " +
+                "this app tries again every 10 seconds or so."
         headphones.problem == HeadphonesProblem.NO_ANSWER -> "Connected, but they did not answer. Trying again every 10 seconds or so."
         !headphones.ready -> "Connecting…"
         else -> null
@@ -97,19 +104,28 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
         return
     }
 
-    val battery = headphones.battery
+    // Headphones' one battery, or each bud's and the case's.
+    val batteries: List<Triple<String, Int?, Boolean>> = if (oneplus) {
+        headphones.parts.map { Triple<String, Int?, Boolean>(partName(it.part) + " ", it.level, it.charging) }
+            .ifEmpty { listOf(Triple<String, Int?, Boolean>("", null, false)) }
+    } else {
+        listOf(Triple<String, Int?, Boolean>("", headphones.battery, headphones.charging))
+    }
     Row(
         modifier = Modifier.align(Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        BatteryGlyph(
-            fraction = battery?.let { it / 100f },
-            tint = glass.textPrimary.copy(alpha = 0.75f),
-            fill = if (headphones.charging) glass.charging else glass.textPrimary,
-        )
-        Text(battery?.let { "$it%" } ?: "–", style = GlassType.callout, color = glass.textPrimary)
-        if (headphones.charging) BoltIcon(glass.charging, Modifier.size(15.dp))
+        batteries.forEachIndexed { i, (label, level, charging) ->
+            if (i > 0) Spacer(Modifier.width(10.dp))
+            BatteryGlyph(
+                fraction = level?.let { it / 100f },
+                tint = glass.textPrimary.copy(alpha = 0.75f),
+                fill = if (charging) glass.charging else glass.textPrimary,
+            )
+            Text(label + (level?.let { "$it%" } ?: "–"), style = GlassType.callout, color = glass.textPrimary)
+            if (charging) BoltIcon(glass.charging, Modifier.size(15.dp))
+        }
     }
     Spacer(Modifier.height(14.dp))
     Row(modifier = Modifier.align(Alignment.CenterHorizontally), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -126,26 +142,110 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
             },
             icon = { BluetoothIcon(glass.textPrimary, Modifier.size(18.dp)) },
         )
-        GlassButton(
-            text = "Turn off",
-            onClick = {
-                source.powerOff(address)
-                onClose()
-            },
-            icon = { PowerIcon(glass.textPrimary, Modifier.size(18.dp)) },
-        )
+        // Earbuds turn off in their case: they take no such command.
+        if (!oneplus) {
+            GlassButton(
+                text = "Turn off",
+                onClick = {
+                    source.powerOff(address)
+                    onClose()
+                },
+                icon = { PowerIcon(glass.textPrimary, Modifier.size(18.dp)) },
+            )
+        }
     }
 
     Spacer(Modifier.height(24.dp))
     SectionLabel("Noise control")
     val modes = noise?.modes ?: NoiseMode.entries
     SegmentedControl(
-        options = modes.map(::modeLabel),
+        options = modes.map { modeLabel(it, headphones.kind) },
         selectedIndex = noise?.let { modes.indexOf(it.mode) } ?: -1,
         onSelect = { i -> noise?.let { source.setNoise(address, it.copy(mode = modes[i])) } },
         enabled = noise != null,
     )
-    // The level and voice focus are for ambient sound; always shown, so nothing moves.
+    if (oneplus) {
+        // How strongly they cancel noise: always shown, so nothing moves. Choosing one cancels noise at that strength.
+        val cancelling = noise?.mode == NoiseMode.NOISE_CANCELLING
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            for (strength in NoiseStrength.entries) {
+                GlassChip(
+                    text = strength.label,
+                    selected = cancelling && noise?.strength == strength,
+                    onClick = {
+                        if (noise != null) source.setNoise(address, noise.copy(mode = NoiseMode.NOISE_CANCELLING, strength = strength))
+                    },
+                    modifier = Modifier.alpha(if (noise != null) 1f else 0.38f),
+                )
+            }
+        }
+    } else {
+        SonyAmbientRows(headphones, source)
+    }
+
+    Spacer(Modifier.height(24.dp))
+    SectionLabel("Volume")
+    // The phone's media volume, theirs while they play the phone's sound; it changes as the finger moves.
+    val volume = headphones.volume
+    var shown by remember(address) { mutableIntStateOf(volume ?: 0) }
+    LaunchedEffect(volume) { volume?.let { shown = it } }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        GlassSlider(
+            value = shown.coerceIn(0, headphones.maxVolume.coerceAtLeast(1)),
+            range = 0..headphones.maxVolume.coerceAtLeast(1),
+            onChange = {
+                shown = it
+                source.setVolume(address, it)
+            },
+            onDone = { source.setVolume(address, it) },
+            label = "Volume",
+            modifier = Modifier.weight(1f).padding(end = 4.dp),
+            enabled = volume != null,
+        )
+        Text(if (volume != null) "$shown" else "–", style = GlassType.callout, color = glass.textSecondary, modifier = Modifier.width(26.dp), textAlign = TextAlign.End)
+    }
+
+    Spacer(Modifier.height(24.dp))
+    SectionLabel("Equalizer")
+    // One row that scrolls sideways, opened at the preset in use.
+    val equalizer = headphones.equalizer
+    val presets = headphones.presets + listOfNotNull(equalizer?.takeIf { e -> headphones.presets.none { it.id == e.id } })
+    val list = rememberLazyListState()
+    LaunchedEffect(equalizer != null) {
+        val index = presets.indexOf(equalizer)
+        if (index > 0) list.scrollToItem(index - 1)
+    }
+    LazyRow(state = list, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        items(presets, key = { it.id }) { preset ->
+            GlassChip(
+                text = preset.label,
+                selected = preset.id == equalizer?.id,
+                onClick = { if (preset.selectable) source.setEqualizer(address, preset) },
+            )
+        }
+    }
+}
+
+private val LABEL_WIDTH = 64.dp
+private const val DEFAULT_LEVEL = 10
+
+private fun modeLabel(mode: NoiseMode, kind: HeadphonesKind): String = when (mode) {
+    NoiseMode.NOISE_CANCELLING -> "Cancelling"
+    NoiseMode.AMBIENT -> if (kind == HeadphonesKind.ONEPLUS) "Transparency" else "Ambient"
+    NoiseMode.OFF -> "Off"
+}
+
+/** Sony's ambient sound level and voice focus, for ambient sound; always shown, so nothing moves. */
+@Composable
+private fun SonyAmbientRows(headphones: Headphones, source: HeadphonesSource) {
+    val glass = LocalGlass.current
+    val address = headphones.address
+    val noise = headphones.noise
     val ambient = noise?.mode == NoiseMode.AMBIENT
     // The level follows the finger; the headphones get it when let go.
     var level by remember(address) { mutableIntStateOf(noise?.ambientLevel?.coerceIn(1, 20) ?: DEFAULT_LEVEL) }
@@ -184,55 +284,4 @@ fun ColumnScope.HeadphonesSheetContent(headphones: Headphones, source: Headphone
             enabled = ambient,
         )
     }
-
-    Spacer(Modifier.height(24.dp))
-    SectionLabel("Volume")
-    // The phone's media volume, theirs while they play the phone's sound; it changes as the finger moves.
-    val volume = headphones.volume
-    var shown by remember(address) { mutableIntStateOf(volume ?: 0) }
-    LaunchedEffect(volume) { volume?.let { shown = it } }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        GlassSlider(
-            value = shown.coerceIn(0, headphones.maxVolume.coerceAtLeast(1)),
-            range = 0..headphones.maxVolume.coerceAtLeast(1),
-            onChange = {
-                shown = it
-                source.setVolume(address, it)
-            },
-            onDone = { source.setVolume(address, it) },
-            label = "Volume",
-            modifier = Modifier.weight(1f).padding(end = 4.dp),
-            enabled = volume != null,
-        )
-        Text(if (volume != null) "$shown" else "–", style = GlassType.callout, color = glass.textSecondary, modifier = Modifier.width(26.dp), textAlign = TextAlign.End)
-    }
-
-    Spacer(Modifier.height(24.dp))
-    SectionLabel("Equalizer")
-    // One row that scrolls sideways, opened at the preset in use.
-    val equalizer = headphones.equalizer
-    val presets = SonyEqualizer.entries.filter { it.selectable || it == equalizer }
-    val list = rememberLazyListState()
-    LaunchedEffect(equalizer != null) {
-        val index = presets.indexOf(equalizer)
-        if (index > 0) list.scrollToItem(index - 1)
-    }
-    LazyRow(state = list, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        items(presets, key = { it.name }) { preset ->
-            GlassChip(
-                text = preset.label,
-                selected = preset == equalizer,
-                onClick = { if (preset.selectable) source.setEqualizer(address, preset) },
-            )
-        }
-    }
-}
-
-private val LABEL_WIDTH = 64.dp
-private const val DEFAULT_LEVEL = 10
-
-private fun modeLabel(mode: NoiseMode): String = when (mode) {
-    NoiseMode.NOISE_CANCELLING -> "Cancelling"
-    NoiseMode.AMBIENT -> "Ambient"
-    NoiseMode.OFF -> "Off"
 }
